@@ -36,15 +36,27 @@ cursor_Can_Buy = False
 cursor_Click_Point = (1636, 433)
 
 
+
+cookie_On_Screen = False
+while cookie_On_Screen == False:
+
+        #Searches for an image in the screen space
+    if pyautogui.locateOnScreen("cookie.PNG", confidence=0.55) != None:
+            print("Cookie on screen")
+            cookie_On_Screen = True
+    else:
+        print("Cannot Locate Cookie")
+
+
+
+
 #Bot Loop
 while keyboard.is_pressed('q') == False:
 
-    if pyautogui.locateOnScreen("cookie.PNG", confidence=0.55) != None:
 
-        print("Cookie on screen")
 
         #Checking Game State...
-        if pyautogui.locateOnScreen("cursor.PNG", confidence=0.8) != None:
+        if pyautogui.locateOnScreen("cursor.PNG", confidence=1) != None:
             click(cursor_Click_Point[0], cursor_Click_Point[1])
             print("Buying Cursor")
             
@@ -57,9 +69,6 @@ while keyboard.is_pressed('q') == False:
 
 
         time.sleep(0.1)
-
-    else:
-        print("Cannot Locate Cookie")
 
 print("Cookie Bot quitting...")
 
