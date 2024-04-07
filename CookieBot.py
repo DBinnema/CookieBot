@@ -1,6 +1,7 @@
 from pyautogui import *
 import pyautogui
 import time
+import cv2
 import keyboard
 import random
 import win32api, win32con
@@ -26,6 +27,11 @@ def click(x,y):
     time.sleep(0.01)
     win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP,0,0)
 
+
+#Get the cookie
+template = cv2.imread('cookie.png', cv2.IMREAD_UNCHANGED)
+
+pyautogui.alert('Open Cookie Clicker and press OK')
 print("Cookie Bot is starting...")
 
 
@@ -38,14 +44,19 @@ cursor_Click_Point = (1636, 433)
 
 
 cookie_On_Screen = False
+
 while cookie_On_Screen == False:
 
         #Searches for an image in the screen space
-    if pyautogui.locateOnScreen("cookie.PNG", confidence=0.55) != None:
-            print("Cookie on screen")
-            cookie_On_Screen = True
-    else:
-        print("Cannot Locate Cookie")
+    try:
+        main_cookie_location = pyautogui.locateOnScreen("cookie.PNG", confidence=0.70)
+        print("Cookie on screen")
+        cookie_Click_Point = pyautogui.center(main_cookie_location)
+        cookie_On_Screen = True
+
+    except pyautogui.ImageNotFoundException:
+        print("I cant see cookie, retrying soon.")
+        time.sleep(2)
 
 
 
@@ -56,15 +67,16 @@ while keyboard.is_pressed('q') == False:
 
 
         #Checking Game State...
-        if pyautogui.locateOnScreen("cursor.PNG", confidence=1) != None:
-            click(cursor_Click_Point[0], cursor_Click_Point[1])
-            print("Buying Cursor")
+        #if pyautogui.locateOnScreen("cursor.PNG", confidence=1) != None:
+         #   click(cursor_Click_Point[0], cursor_Click_Point[1])
+         #   print("Buying Cursor")
             
 
         
 
         #Click the cookie
         click(cookie_Click_Point[0], cookie_Click_Point[1])
+        print("Clicking...")
         
 
 
