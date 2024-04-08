@@ -12,6 +12,62 @@ def click(x,y):
     win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN,0,0)
     time.sleep(0.01)
     win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP,0,0)
+    
+def getclickposition(screenImg, template):
+
+    #The actual search function, returns an image where white pixels are th best match
+    correlation = cv2.matchTemplate(screenImg, template, cv2.TM_CCOEFF_NORMED)
+
+    #this gets the whitest and darkest pixels on the result image
+    min_value, max_value, min_location, max_location =  cv2.minMaxLoc(correlation)
+
+
+    print('Confidence: %s' % max_value)
+
+    confidence_Threshhold = 0.7
+    if max_value < confidence_Threshhold:
+        print('Did not find template.')
+    else:
+        print('Found template with %s confidence.' % max_value)
+    
+    #Setting the click point
+        top_left = max_location
+        half_w = template.shape[1] //2
+        half_h = template.shape[0] //2 
+        large_cookie_center_pos = top_left[0] + half_w, top_left[1] + half_h
+        return large_cookie_center_pos
+
+
+class Building:
+     name = ''
+     amount = 0
+     base_cost = 0
+     base_cps = 0.0
+
+    
+     def __init__(self, name, base_cps, base_cost):
+          self.name = name
+          self.amount = 0
+          self.base_cps = base_cps
+          self.base_cost = base_cost
+
+     def __str__(self):
+          return f'{self.name}'
+   
+          
+
+    
+
+    
+
+#Some info for starting logic
+cursor = Building('cursor', 0.1, 15)
+grandma = Building('grandma', 1, 100)
+
+
+print(cursor.base_cost)
+
+
 
 
 #Progrram start
@@ -22,13 +78,16 @@ screen_width, screen_height = pyautogui.size()
 # Take screenshot using PyAutoGUI
 screenshot = pyautogui.screenshot()
 
+
 # Convert screenshot to OpenCV format
 screenImg = np.array(screenshot)
 screenImg = cv2.cvtColor(screenImg, cv2.COLOR_RGB2BGR)
 
-
 #Load the image(s) from file
 template = cv2.imread('Images/cropped_cookie.png')
+
+
+getclickposition(screenImg=screenImg template=template=)
 
 #The actual search function, returns an image where white pixels are th best match
 correlation = cv2.matchTemplate(screenImg, template, cv2.TM_CCOEFF_NORMED)
@@ -59,8 +118,7 @@ while keyboard.is_pressed('q') == False:
 
         #Click the cookie
         click(large_cookie_center_pos[0], large_cookie_center_pos[1])
-        print("Clicking Cookie")
-        
+        print("Clicking Cookie")        
 
 
         time.sleep(0.4)
