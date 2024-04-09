@@ -8,6 +8,8 @@ import win32api, win32con
 import cv2
 import numpy as np
 import math
+import matplotlib.pyplot as plt
+import sys
 
 
 def click(cookie_center_pos):
@@ -23,18 +25,24 @@ def getCenterPosition(screenImg, template):
 
     #The actual search function, returns an image where white pixels are th best match
     correlation = cv2.matchTemplate(screenImg, template, cv2.TM_CCOEFF_NORMED)
-
+    
     #this gets the whitest and darkest pixels on the result image
     min_value, max_value, min_location, max_location =  cv2.minMaxLoc(correlation)
 
 
     #print('Confidence: %s' % max_value)
 
-    #confidence_Threshhold = 0.7
-    #if max_value < confidence_Threshhold:
-        #print('Did not find template.')
-   # else:
-       # print('Found template with %s confidence.' % max_value)
+    confidence_Threshhold = 0.8
+    if max_value < confidence_Threshhold:
+        print('Did not find template.')
+        return (0,0)
+    else:
+        print('Found template with %s confidence.' % max_value)
+        #Setting the click point
+        top_left = max_location
+        half_w = template.shape[1] //2
+        half_h = template.shape[0] //2 
+        large_cookie_center_pos = top_left[0] + half_w, top_left[1] + half_h
     
     #Setting the click point
     top_left = max_location
@@ -44,42 +52,96 @@ def getCenterPosition(screenImg, template):
     return large_cookie_center_pos
 
 
-class Building:
+class Shop_Item():
      name = ''
      amount = 0
      base_cost = 0
      base_cps = 0.0
 
      current_cost = 0.0
-     current_roi = 0    
+     current_roi = 0
+         
 
     
+     def __init__(self, name, base_cost):
+          self.name = name          
+          self.base_cost = base_cost 
+
+          self.current_roi = self.current_cost/self.base_cps
+
+     def getClickPosition(self):
+        return 
+
+     def addAmount(self):
+        self.amount += 1        
+        self.current_cost = int(self.base_cost * 1.15**(self.amount))
+        self.current_roi = self.current_cost/self.base_cps
+     
+
+     def __str__(self):
+          return f'{self.name}'
+     
+class Building(Shop_Item):
      def __init__(self, name, base_cps, base_cost, clickPos):
           self.name = name
           self.amount = 0
           self.base_cps = base_cps
           self.base_cost = base_cost
           self.clickPos = clickPos
+          self.multiplier = 1
           
           
           self.current_cost = base_cost
           self.current_roi = self.current_cost/self.base_cps
 
-     def addAmount(self):
-        self.amount += 1        
-        self.current_cost = int(self.base_cost * 1.15**(self.amount))
-        self.current_roi = self.current_cost/self.base_cps
+     def addMultiplier(self, multiplier):
+          self.multiplier += multiplier
+        
 
+     def getClickPosition(self):
+        return self.clickPos
      
+     def getROI(self):
+          return self.current_roi
+     
+class Upgrade(Shop_Item):
+    
+     
+     def __init__(self, name, base_cost, upgrade_Image, building, multiplier):
+          self.name = name                
+          self.base_cost = base_cost
+          
 
-     def __str__(self):
-          return f'{self.name}'
-   
+          self.upgradeImage = upgrade_Image
+          self.building = building
+          self.multiplier = multiplier
+          
+          
+          
+          self.current_cost = base_cost
+          
+          
+
+     def getROI(self):
+          roi = self.base_cost/(self.building.amount * self.building.base_cps * self.building.multiplier)
+          
+          return roi
+     
+     def addAmount(self):
+          #this means the upgrade has been bought
+          self.building.addMultiplier(self.multiplier)
+          return
+
+
+     def getClickPosition(self):
+        shop_Frame = update_Frame()
+       
+        return getCenterPosition(shop_Frame, self.upgradeImage)
+    
           
 
     
-def update_Frame():
-        
+def update_Frame():        
     # Take screenshot using PyAutoGUI
     screenshot = pyautogui.screenshot()
     # Convert screenshot to OpenCV format
@@ -89,46 +151,31 @@ def update_Frame():
 
 def getBestROI(building_list):
      bestBuilding = building_list[0]
-     bestCpS = building_list[0].current_roi
+     bestCpS = building_list[0].getROI()
      for element in building_list:
-          print('%s RIO: %s s' %(element.name, element.current_roi))
-          if (element.current_roi < bestCpS):
+          print('---------------------\n%s RIO: %s s\n---------------------' %(element.name, element.getROI()))         
+          if (element.getROI() < bestCpS):
                bestBuilding=element
-               bestCpS=element.current_roi
+               bestCpS = element.getROI()
      return bestBuilding
 
 def getCurrentCpS(building_list):
      CpS = 0
      for element in building_list:
 
-          thisCpS = element.base_cps * element.amount
+          thisCpS = element.base_cps * element.amount * element.multiplier
           CpS += thisCpS
           
      return CpS
 
-def getBestBuilding(building_list, currentCpS):
-     bestBuilding = building_list[0]
-     bestValue = building_list[0].current_roi
-
-     for element in building_list:
-          value = element.current_roi = (element.current_cost/currentCpS)
-          print('%s RIO + save time: %s s' %(element.name, element.current_roi))
-          if (value < bestValue):
-               bestBuilding=element
-               bestValue=value
-     return bestBuilding
+def printToLog(printstring):
+     file1 = open("log.txt", "a")  # append mode
+     file1.write('%s\n' % printstring)
+     file1.close    
 
 
 
-
-
-
-        
-    
-
-
-
-
+            
 
 
 
@@ -142,6 +189,7 @@ template = cv2.imread('Images/cropped_cookie.png')
 #These two are used to find the store spacing
 cursor_building = cv2.imread('Images/Buildings/cursor_blackout.png')
 grandma_building = cv2.imread('Images/Buildings/grandma_blackout.png')
+pointer_upgrade_Image = cv2.imread('Images/pointer_Upgrade.png')
 
 print('Images loaded! \n')
 
@@ -153,6 +201,10 @@ if respone == 'Close':
 
 #inital frame
 screenImg = update_Frame()
+
+#preparing new log
+clear_file = open("log.txt", 'w') 
+clear_file.close()
 
 #Finding the big cookie, basis for all game
 large_cookie_center_pos = getCenterPosition(screenImg=screenImg, template=template)
@@ -172,78 +224,120 @@ grandma = Building('grandma', 1, 100, grandma_Pos)
 
 #Now that the first two store has been found hopefully we can calculate the next store positions
 
+
 offset = grandma.clickPos[1] - cursor.clickPos[1]
 previousStorePos = grandma.clickPos
 
-
+#Defining Buildings
 farm = Building('farm',8, 1100, (previousStorePos[0], previousStorePos[1]+ offset ))
 previousStorePos = farm.clickPos
 
 mine = Building('mine',47, 12000, (previousStorePos[0], previousStorePos[1]+ offset ))
 previousStorePos = mine.clickPos
 
-factory = Building('factory',260, 1300, (previousStorePos[0], previousStorePos[1]+ offset ))
+factory = Building('factory',260, 130000, (previousStorePos[0], previousStorePos[1]+ offset ))
 previousStorePos = factory.clickPos
 
 
-active_building_list = [cursor]
-upgrade_building_list = [grandma, farm, mine, factory]
+#Defining Upgrades
+
+pointer_0 = Upgrade('pointer_0_upgrade', 100, pointer_upgrade_Image, cursor, 2)
+
+
+
+
+
+
+active_building_list = [cursor, pointer_0]
+
+#Index at 1 because we assume that cursor is already unlocked
+unlock_index = 1
+complete_building_list = [cursor, grandma, farm, mine, factory]
+
+
 
 
 
 
 #assuming a fresh game
 cookie_count = 0
+total_cookie_amount = 0
 nextPurchase = active_building_list[0]
 currentCpS = 0
 
+#The cookies to add on one click
+clickvalue = 1
+
+uptime = time.time()
 #Bot Loop
+frameCount = 0
+
+
 while keyboard.is_pressed('q') == False:
-        #To time this loop (called frame)        
-        frameStartTime = time.time()
+        
+        #Per-frame variables     
+        frameStartTime = time.time()        
         cookies_gained_this_frame = 0
 
+        if keyboard.is_pressed('b') == True:
+             frame = update_Frame()
+             store_Pos0 = getCenterPosition(screenImg=frame, template=pointer_upgrade_Image)
+             click(store_Pos0)
         
-        #Unlock the next building if we can afford it
-        if upgrade_building_list and cookie_count > upgrade_building_list[0].base_cost//3:
-             print('Unlocking %s.' %(upgrade_building_list[0].name))
-             active_building_list.append(upgrade_building_list[0])
-             upgrade_building_list = upgrade_building_list[1:]
-             nextPurchase = getBestROI(active_building_list)
-             
-             
-              
 
-        #If the Building we want can be afforded, purchase that
+        #Unlock the next building if we can afford it
+        if complete_building_list and cookie_count > complete_building_list[unlock_index].base_cost//3:
+             print('Unlocking %s.' %(complete_building_list[unlock_index].name))
+             printToLog('Unlocking %s.' %(complete_building_list[unlock_index].name))
+
+             active_building_list.append(complete_building_list[unlock_index])
+             unlock_index +=1
+
+             #No longer needed as using an unlock_index
+             ##upgrade_building_list = upgrade_building_list[1:]
+
+             nextPurchase = getBestROI(active_building_list)          
+
+        
+        #If the Item we want can be afforded, purchase that
         if(cookie_count - 3 > nextPurchase.current_cost):
-             
+                          
              #Apply a negative amount to cookie count to offset the pre buy cps
              frameBuy = time.time()
              pre_Buy_Time = (frameBuy - frameStartTime)
              pre_Buy_CpS = currentCpS
 
-             click(nextPurchase.clickPos)
+             click(nextPurchase.getClickPosition())
+
+             
 
              #Trying to keep cookie count relitivly accurate
-             cookie_count -= nextPurchase.current_cost
+             cookie_count -= round(nextPurchase.current_cost)
              nextPurchase.addAmount()
+             
              print('Buying %s. Now have %s %s.' %(nextPurchase.name, nextPurchase.amount,nextPurchase.name))             
              currentCpS = getCurrentCpS(active_building_list)
              nextPurchase = getBestROI(active_building_list)
 
+             printToLog('Bought %s. Now have %s %s.' %(nextPurchase.name, nextPurchase.amount,nextPurchase.name))
+
+             #Setting a negative amount for the time before this frame
              cookies_gained_this_frame -= currentCpS - pre_Buy_CpS
 
 
-        
-        #
-          #For the rest of the frame we click big cookie
+     #For the rest of the frame we click big cookie
         frameCurrentTime = time.time()
         frameTime = (frameCurrentTime - frameStartTime)
 
         while(frameTime < 0.8):
              #For the rest of this frame, click the cookie
-             click(large_cookie_center_pos)
-             cookie_count = cookie_count + 1
+             
+             pyautogui.doubleClick(large_cookie_center_pos)
+
+             #adding value to the appropriate counters
+             cookie_count += clickvalue
+             total_cookie_amount += clickvalue             
+
              #check the frame time aiming for 1s frames
              frameCurrentTime = time.time()
              frameTime = (frameCurrentTime - frameStartTime)
@@ -253,28 +347,35 @@ while keyboard.is_pressed('q') == False:
         frameTime = (frameEndTime - frameStartTime)
 
         cookies_gained_this_frame += round(currentCpS * frameTime, 1)
+
+        #Incrementing counters
         cookie_count += cookies_gained_this_frame
+        total_cookie_amount += cookies_gained_this_frame
+       
 
         ##Print a frame message for debugging
+
 
         frameMessage = 'Frame took %s seconds. \nEstimated Cookies %s CpS: %s ' %(format(frameTime, "0.2f"), cookie_count, format(currentCpS, "0.2f"))
 
         print(frameMessage)
 
     
-
-print("Cookie Bot quitting...")
+quitTime = time.time()
+delta_Uptime = round(quitTime - uptime)
+total_cookie_amount = round(total_cookie_amount,1)
+print("Cookie Bot quitting...\nTotalGenerated: %s \nRuntime: %s"  %(total_cookie_amount, delta_Uptime ))
 
 
 #Debugging
-
+mapImg = update_Frame()
 #Draw a circle for the click point
 mapImg = cv2.circle(frame, large_cookie_center_pos, radius =5, color=(255,0,0), thickness=-7)
 mapImg = cv2.circle(frame, grandma.clickPos, radius =5, color=(255,255,0), thickness=-1)
 mapImg = cv2.circle(frame, cursor.clickPos, radius =5, color=(255,0,255), thickness=-1)
-mapImg = cv2.circle(frame, farm.clickPos, radius =5, color=(255,255,255), thickness=3)
+mapImg = cv2.circle(frame, pointer_0.getClickPosition(), radius =5, color=(255,255,255), thickness=3)
 
-cv2.imwrite('QuitImages/GameEnd-%s.jpeg' %currentCpS, mapImg)
+cv2.imwrite('QuitImages/GameEnd-%s.jpeg' %round(total_cookie_amount), mapImg)
 
 
 
