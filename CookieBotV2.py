@@ -60,6 +60,10 @@ class Shop_Item():
 
      current_cost = 0.0
      current_roi = 0
+
+     def getTotalCpS(self):
+          
+          return 0
          
 
     
@@ -72,10 +76,7 @@ class Shop_Item():
      def getClickPosition(self):
         return 
 
-     def addAmount(self):
-        self.amount += 1        
-        self.current_cost = int(self.base_cost * 1.15**(self.amount))
-        self.current_roi = self.current_cost/self.base_cps
+     
      
 
      def __str__(self):
@@ -94,9 +95,19 @@ class Building(Shop_Item):
           self.current_cost = base_cost
           self.current_roi = self.current_cost/self.base_cps
 
+     def addAmount(self):
+        self.amount += 1        
+        self.current_cost = int(self.base_cost * 1.15**(self.amount))
+        self.current_roi = self.current_cost/self.base_cps
+
      def addMultiplier(self, multiplier):
-          self.multiplier += multiplier
-        
+          self.multiplier *= multiplier
+     
+    
+     def getTotalCpS(self):
+          CpS = (self.base_cps * self.amount) * (self.multiplier * 1)
+          
+          return CpS
 
      def getClickPosition(self):
         return self.clickPos
@@ -115,12 +126,16 @@ class Upgrade(Shop_Item):
           self.upgradeImage = upgrade_Image
           self.building = building
           self.multiplier = multiplier
+     
           
           
           
           self.current_cost = base_cost
           
+     def getTotalCpS(self):
           
+          return 0
+     
 
      def getROI(self):
           roi = self.base_cost/(self.building.amount * self.building.base_cps * self.building.multiplier)
@@ -130,6 +145,12 @@ class Upgrade(Shop_Item):
      def addAmount(self):
           #this means the upgrade has been bought
           self.building.addMultiplier(self.multiplier)
+
+          #hacky Solution so upgrades never get bought twice
+      
+          self.base_cost = math.inf
+
+
           return
 
 
@@ -160,26 +181,34 @@ def getBestROI(building_list):
      return bestBuilding
 
 def getCurrentCpS(building_list):
+     printToLog('cps Breakdown\n')
      CpS = 0
      for element in building_list:
 
-          thisCpS = element.base_cps * element.amount * element.multiplier
+          thisCpS = element.getTotalCpS()
           CpS += thisCpS
+          printToLog('cps from %s: %s' %(element.name, thisCpS))
+          
           
      return CpS
+
+def recordCookieCount(cookiecount, time , cps):
+     file1 = open("point_data.txt", "a")  # append mode
+     file1.write('%s, %s, %s\n' % (time, cookiecount, cps))
+     file1.close    
 
 def printToLog(printstring):
      file1 = open("log.txt", "a")  # append mode
      file1.write('%s\n' % printstring)
-     file1.close    
-
-
+     file1.close  
 
             
-
+def upgradeFunc(value, multiplier):
+     value *= multiplier
 
 
 ##Progrram start
+T = 3600
 
 #Load the image(s) from file
 
@@ -190,6 +219,7 @@ template = cv2.imread('Images/cropped_cookie.png')
 cursor_building = cv2.imread('Images/Buildings/cursor_blackout.png')
 grandma_building = cv2.imread('Images/Buildings/grandma_blackout.png')
 pointer_upgrade_Image = cv2.imread('Images/pointer_Upgrade.png')
+pointer_upgrade_1_Image = cv2.imread('Images/pointer_Upgrade_1.png')
 
 print('Images loaded! \n')
 
@@ -202,8 +232,11 @@ if respone == 'Close':
 #inital frame
 screenImg = update_Frame()
 
-#preparing new log
+#Clearing records for new run
 clear_file = open("log.txt", 'w') 
+clear_file.close()
+
+clear_file = open("point_data.txt", 'w') 
 clear_file.close()
 
 #Finding the big cookie, basis for all game
@@ -238,17 +271,29 @@ previousStorePos = mine.clickPos
 factory = Building('factory',260, 130000, (previousStorePos[0], previousStorePos[1]+ offset ))
 previousStorePos = factory.clickPos
 
+bank = Building('bank',1400, 1400000, (previousStorePos[0], previousStorePos[1]+ offset ))
+previousStorePos = bank.clickPos
+
+temple = Building('temple', 7800, 12000000, (previousStorePos[0], previousStorePos[1]+ offset ))
+previousStorePos = temple.clickPos
+
+wizard_Tower = Building('wizard tower', 44000, 330000000, (previousStorePos[0], previousStorePos[1]+ offset ))
+previousStorePos = temple.clickPos
+
 
 #Defining Upgrades
+#The cookies to add on one click
+clickvalue = 1
 
-pointer_0 = Upgrade('pointer_0_upgrade', 100, pointer_upgrade_Image, cursor, 2)
+pointer_0 = Upgrade('pointer_0_upgrade', 100, pointer_upgrade_Image, cursor, 2.0)
+pointer_1 = Upgrade('pointer_1_upgrade', 500, pointer_upgrade_Image, cursor, 2.0)
 
 
 
 
 
 
-active_building_list = [cursor, pointer_0]
+active_building_list = [cursor]
 
 #Index at 1 because we assume that cursor is already unlocked
 unlock_index = 1
@@ -265,13 +310,9 @@ total_cookie_amount = 0
 nextPurchase = active_building_list[0]
 currentCpS = 0
 
-#The cookies to add on one click
-clickvalue = 1
 
-uptime = time.time()
-#Bot Loop
-frameCount = 0
-
+#Uptime Counter
+uptime_start = time.time()
 
 while keyboard.is_pressed('q') == False:
         
@@ -286,7 +327,7 @@ while keyboard.is_pressed('q') == False:
         
 
         #Unlock the next building if we can afford it
-        if complete_building_list and cookie_count > complete_building_list[unlock_index].base_cost//3:
+        if unlock_index < len(complete_building_list) and cookie_count > complete_building_list[unlock_index].base_cost//3:
              print('Unlocking %s.' %(complete_building_list[unlock_index].name))
              printToLog('Unlocking %s.' %(complete_building_list[unlock_index].name))
 
@@ -342,27 +383,28 @@ while keyboard.is_pressed('q') == False:
              frameCurrentTime = time.time()
              frameTime = (frameCurrentTime - frameStartTime)
         
-     
-        frameEndTime = time.time()
-        frameTime = (frameEndTime - frameStartTime)
+        current_Time = time.time()
+        current_Runtime = (current_Time - uptime_start)        
+        frameTime = (current_Time - frameStartTime)
 
         cookies_gained_this_frame += round(currentCpS * frameTime, 1)
 
         #Incrementing counters
         cookie_count += cookies_gained_this_frame
         total_cookie_amount += cookies_gained_this_frame
-       
+
+        recordCookieCount(total_cookie_amount, current_Runtime, currentCpS )
 
         ##Print a frame message for debugging
 
 
         frameMessage = 'Frame took %s seconds. \nEstimated Cookies %s CpS: %s ' %(format(frameTime, "0.2f"), cookie_count, format(currentCpS, "0.2f"))
-
+      
         print(frameMessage)
 
     
 quitTime = time.time()
-delta_Uptime = round(quitTime - uptime)
+delta_Uptime = round(quitTime - uptime_start)
 total_cookie_amount = round(total_cookie_amount,1)
 print("Cookie Bot quitting...\nTotalGenerated: %s \nRuntime: %s"  %(total_cookie_amount, delta_Uptime ))
 

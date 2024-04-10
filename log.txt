@@ -1,17 +1,743 @@
+cps Breakdown
+
+cps from cursor: 0.1
 Bought cursor. Now have 1 cursor.
+cps Breakdown
+
+cps from cursor: 0.2
 Bought cursor. Now have 2 cursor.
+cps Breakdown
+
+cps from cursor: 0.30000000000000004
 Bought cursor. Now have 3 cursor.
-Bought pointer_0_upgrade. Now have 0 pointer_0_upgrade.
+cps Breakdown
+
+cps from cursor: 0.4
+Bought cursor. Now have 4 cursor.
 Unlocking grandma.
+cps Breakdown
+
+cps from cursor: 0.4
+cps from grandma: 1
 Bought grandma. Now have 1 grandma.
+cps Breakdown
+
+cps from cursor: 0.4
+cps from grandma: 2
 Bought grandma. Now have 2 grandma.
+cps Breakdown
+
+cps from cursor: 0.4
+cps from grandma: 3
 Bought grandma. Now have 3 grandma.
+cps Breakdown
+
+cps from cursor: 0.4
+cps from grandma: 4
 Bought grandma. Now have 4 grandma.
+cps Breakdown
+
+cps from cursor: 0.4
+cps from grandma: 5
 Bought grandma. Now have 5 grandma.
+cps Breakdown
+
+cps from cursor: 0.4
+cps from grandma: 6
 Bought grandma. Now have 6 grandma.
-Bought pointer_0_upgrade. Now have 0 pointer_0_upgrade.
-Bought pointer_0_upgrade. Now have 0 pointer_0_upgrade.
-Bought pointer_0_upgrade. Now have 0 pointer_0_upgrade.
-Bought pointer_0_upgrade. Now have 0 pointer_0_upgrade.
-Bought pointer_0_upgrade. Now have 0 pointer_0_upgrade.
-Bought pointer_0_upgrade. Now have 0 pointer_0_upgrade.
+cps Breakdown
+
+cps from cursor: 0.4
+cps from grandma: 7
+Bought cursor. Now have 4 cursor.
+cps Breakdown
+
+cps from cursor: 0.5
+cps from grandma: 7
+Bought grandma. Now have 7 grandma.
+cps Breakdown
+
+cps from cursor: 0.5
+cps from grandma: 8
+Bought cursor. Now have 5 cursor.
+cps Breakdown
+
+cps from cursor: 0.6000000000000001
+cps from grandma: 8
+Bought grandma. Now have 8 grandma.
+cps Breakdown
+
+cps from cursor: 0.6000000000000001
+cps from grandma: 9
+Bought cursor. Now have 6 cursor.
+cps Breakdown
+
+cps from cursor: 0.7000000000000001
+cps from grandma: 9
+Bought grandma. Now have 9 grandma.
+Unlocking farm.
+cps Breakdown
+
+cps from cursor: 0.7000000000000001
+cps from grandma: 9
+cps from farm: 8
+Bought farm. Now have 1 farm.
+cps Breakdown
+
+cps from cursor: 0.7000000000000001
+cps from grandma: 9
+cps from farm: 16
+Bought farm. Now have 2 farm.
+cps Breakdown
+
+cps from cursor: 0.7000000000000001
+cps from grandma: 9
+cps from farm: 24
+Bought farm. Now have 3 farm.
+cps Breakdown
+
+cps from cursor: 0.7000000000000001
+cps from grandma: 9
+cps from farm: 32
+Bought farm. Now have 4 farm.
+cps Breakdown
+
+cps from cursor: 0.7000000000000001
+cps from grandma: 9
+cps from farm: 40
+Bought farm. Now have 5 farm.
+cps Breakdown
+
+cps from cursor: 0.7000000000000001
+cps from grandma: 9
+cps from farm: 48
+Bought farm. Now have 6 farm.
+cps Breakdown
+
+cps from cursor: 0.7000000000000001
+cps from grandma: 9
+cps from farm: 56
+Bought grandma. Now have 9 grandma.
+cps Breakdown
+
+cps from cursor: 0.7000000000000001
+cps from grandma: 10
+cps from farm: 56
+Bought farm. Now have 7 farm.
+cps Breakdown
+
+cps from cursor: 0.7000000000000001
+cps from grandma: 10
+cps from farm: 64
+Bought cursor. Now have 7 cursor.
+cps Breakdown
+
+cps from cursor: 0.8
+cps from grandma: 10
+cps from farm: 64
+Bought grandma. Now have 10 grandma.
+cps Breakdown
+
+cps from cursor: 0.8
+cps from grandma: 11
+cps from farm: 64
+Bought farm. Now have 8 farm.
+cps Breakdown
+
+cps from cursor: 0.8
+cps from grandma: 11
+cps from farm: 72
+Bought cursor. Now have 8 cursor.
+cps Breakdown
+
+cps from cursor: 0.9
+cps from grandma: 11
+cps from farm: 72
+Bought grandma. Now have 11 grandma.
+cps Breakdown
+
+cps from cursor: 0.9
+cps from grandma: 12
+cps from farm: 72
+Bought farm. Now have 9 farm.
+cps Breakdown
+
+cps from cursor: 0.9
+cps from grandma: 12
+cps from farm: 80
+Bought cursor. Now have 9 cursor.
+cps Breakdown
+
+cps from cursor: 1.0
+cps from grandma: 12
+cps from farm: 80
+Bought grandma. Now have 12 grandma.
+cps Breakdown
+
+cps from cursor: 1.0
+cps from grandma: 13
+cps from farm: 80
+Bought farm. Now have 10 farm.
+Unlocking mine.
+cps Breakdown
+
+cps from cursor: 1.0
+cps from grandma: 13
+cps from farm: 80
+cps from mine: 47
+Bought mine. Now have 1 mine.
+cps Breakdown
+
+cps from cursor: 1.0
+cps from grandma: 13
+cps from farm: 80
+cps from mine: 94
+Bought mine. Now have 2 mine.
+cps Breakdown
+
+cps from cursor: 1.0
+cps from grandma: 13
+cps from farm: 80
+cps from mine: 141
+Bought mine. Now have 3 mine.
+cps Breakdown
+
+cps from cursor: 1.0
+cps from grandma: 13
+cps from farm: 80
+cps from mine: 188
+Bought mine. Now have 4 mine.
+cps Breakdown
+
+cps from cursor: 1.0
+cps from grandma: 13
+cps from farm: 80
+cps from mine: 235
+Bought mine. Now have 5 mine.
+cps Breakdown
+
+cps from cursor: 1.0
+cps from grandma: 13
+cps from farm: 80
+cps from mine: 282
+Bought farm. Now have 10 farm.
+cps Breakdown
+
+cps from cursor: 1.0
+cps from grandma: 13
+cps from farm: 88
+cps from mine: 282
+Bought mine. Now have 6 mine.
+cps Breakdown
+
+cps from cursor: 1.0
+cps from grandma: 13
+cps from farm: 88
+cps from mine: 329
+Bought cursor. Now have 10 cursor.
+cps Breakdown
+
+cps from cursor: 1.1
+cps from grandma: 13
+cps from farm: 88
+cps from mine: 329
+Bought grandma. Now have 13 grandma.
+cps Breakdown
+
+cps from cursor: 1.1
+cps from grandma: 14
+cps from farm: 88
+cps from mine: 329
+Bought farm. Now have 11 farm.
+cps Breakdown
+
+cps from cursor: 1.1
+cps from grandma: 14
+cps from farm: 96
+cps from mine: 329
+Bought mine. Now have 7 mine.
+cps Breakdown
+
+cps from cursor: 1.1
+cps from grandma: 14
+cps from farm: 96
+cps from mine: 376
+Bought cursor. Now have 11 cursor.
+cps Breakdown
+
+cps from cursor: 1.2000000000000002
+cps from grandma: 14
+cps from farm: 96
+cps from mine: 376
+Bought grandma. Now have 14 grandma.
+cps Breakdown
+
+cps from cursor: 1.2000000000000002
+cps from grandma: 15
+cps from farm: 96
+cps from mine: 376
+Bought farm. Now have 12 farm.
+cps Breakdown
+
+cps from cursor: 1.2000000000000002
+cps from grandma: 15
+cps from farm: 104
+cps from mine: 376
+Bought mine. Now have 8 mine.
+cps Breakdown
+
+cps from cursor: 1.2000000000000002
+cps from grandma: 15
+cps from farm: 104
+cps from mine: 423
+Bought cursor. Now have 12 cursor.
+cps Breakdown
+
+cps from cursor: 1.3
+cps from grandma: 15
+cps from farm: 104
+cps from mine: 423
+Bought grandma. Now have 15 grandma.
+cps Breakdown
+
+cps from cursor: 1.3
+cps from grandma: 16
+cps from farm: 104
+cps from mine: 423
+Bought farm. Now have 13 farm.
+cps Breakdown
+
+cps from cursor: 1.3
+cps from grandma: 16
+cps from farm: 112
+cps from mine: 423
+Bought mine. Now have 9 mine.
+cps Breakdown
+
+cps from cursor: 1.3
+cps from grandma: 16
+cps from farm: 112
+cps from mine: 470
+Bought cursor. Now have 13 cursor.
+cps Breakdown
+
+cps from cursor: 1.4000000000000001
+cps from grandma: 16
+cps from farm: 112
+cps from mine: 470
+Bought grandma. Now have 16 grandma.
+cps Breakdown
+
+cps from cursor: 1.4000000000000001
+cps from grandma: 17
+cps from farm: 112
+cps from mine: 470
+Bought farm. Now have 14 farm.
+cps Breakdown
+
+cps from cursor: 1.4000000000000001
+cps from grandma: 17
+cps from farm: 120
+cps from mine: 470
+Bought mine. Now have 10 mine.
+Unlocking factory.
+cps Breakdown
+
+cps from cursor: 1.4000000000000001
+cps from grandma: 17
+cps from farm: 120
+cps from mine: 470
+cps from factory: 260
+Bought factory. Now have 1 factory.
+cps Breakdown
+
+cps from cursor: 1.4000000000000001
+cps from grandma: 17
+cps from farm: 120
+cps from mine: 470
+cps from factory: 520
+Bought factory. Now have 2 factory.
+cps Breakdown
+
+cps from cursor: 1.4000000000000001
+cps from grandma: 17
+cps from farm: 120
+cps from mine: 470
+cps from factory: 780
+Bought factory. Now have 3 factory.
+cps Breakdown
+
+cps from cursor: 1.4000000000000001
+cps from grandma: 17
+cps from farm: 120
+cps from mine: 470
+cps from factory: 1040
+Bought factory. Now have 4 factory.
+cps Breakdown
+
+cps from cursor: 1.4000000000000001
+cps from grandma: 17
+cps from farm: 120
+cps from mine: 470
+cps from factory: 1300
+Bought factory. Now have 5 factory.
+cps Breakdown
+
+cps from cursor: 1.4000000000000001
+cps from grandma: 17
+cps from farm: 120
+cps from mine: 470
+cps from factory: 1560
+Bought mine. Now have 10 mine.
+cps Breakdown
+
+cps from cursor: 1.4000000000000001
+cps from grandma: 17
+cps from farm: 120
+cps from mine: 517
+cps from factory: 1560
+Bought cursor. Now have 14 cursor.
+cps Breakdown
+
+cps from cursor: 1.5
+cps from grandma: 17
+cps from farm: 120
+cps from mine: 517
+cps from factory: 1560
+Bought grandma. Now have 17 grandma.
+cps Breakdown
+
+cps from cursor: 1.5
+cps from grandma: 18
+cps from farm: 120
+cps from mine: 517
+cps from factory: 1560
+Bought farm. Now have 15 farm.
+cps Breakdown
+
+cps from cursor: 1.5
+cps from grandma: 18
+cps from farm: 128
+cps from mine: 517
+cps from factory: 1560
+Bought factory. Now have 6 factory.
+cps Breakdown
+
+cps from cursor: 1.5
+cps from grandma: 18
+cps from farm: 128
+cps from mine: 517
+cps from factory: 1820
+Bought mine. Now have 11 mine.
+cps Breakdown
+
+cps from cursor: 1.5
+cps from grandma: 18
+cps from farm: 128
+cps from mine: 564
+cps from factory: 1820
+Bought cursor. Now have 15 cursor.
+cps Breakdown
+
+cps from cursor: 1.6
+cps from grandma: 18
+cps from farm: 128
+cps from mine: 564
+cps from factory: 1820
+Bought grandma. Now have 18 grandma.
+cps Breakdown
+
+cps from cursor: 1.6
+cps from grandma: 19
+cps from farm: 128
+cps from mine: 564
+cps from factory: 1820
+Bought farm. Now have 16 farm.
+cps Breakdown
+
+cps from cursor: 1.6
+cps from grandma: 19
+cps from farm: 136
+cps from mine: 564
+cps from factory: 1820
+Bought factory. Now have 7 factory.
+cps Breakdown
+
+cps from cursor: 1.6
+cps from grandma: 19
+cps from farm: 136
+cps from mine: 564
+cps from factory: 2080
+Bought mine. Now have 12 mine.
+cps Breakdown
+
+cps from cursor: 1.6
+cps from grandma: 19
+cps from farm: 136
+cps from mine: 611
+cps from factory: 2080
+Bought cursor. Now have 16 cursor.
+cps Breakdown
+
+cps from cursor: 1.7000000000000002
+cps from grandma: 19
+cps from farm: 136
+cps from mine: 611
+cps from factory: 2080
+Bought grandma. Now have 19 grandma.
+cps Breakdown
+
+cps from cursor: 1.7000000000000002
+cps from grandma: 20
+cps from farm: 136
+cps from mine: 611
+cps from factory: 2080
+Bought farm. Now have 17 farm.
+cps Breakdown
+
+cps from cursor: 1.7000000000000002
+cps from grandma: 20
+cps from farm: 144
+cps from mine: 611
+cps from factory: 2080
+Bought factory. Now have 8 factory.
+cps Breakdown
+
+cps from cursor: 1.7000000000000002
+cps from grandma: 20
+cps from farm: 144
+cps from mine: 611
+cps from factory: 2340
+Bought mine. Now have 13 mine.
+cps Breakdown
+
+cps from cursor: 1.7000000000000002
+cps from grandma: 20
+cps from farm: 144
+cps from mine: 658
+cps from factory: 2340
+Bought cursor. Now have 17 cursor.
+cps Breakdown
+
+cps from cursor: 1.8
+cps from grandma: 20
+cps from farm: 144
+cps from mine: 658
+cps from factory: 2340
+Bought grandma. Now have 20 grandma.
+cps Breakdown
+
+cps from cursor: 1.8
+cps from grandma: 21
+cps from farm: 144
+cps from mine: 658
+cps from factory: 2340
+Bought farm. Now have 18 farm.
+cps Breakdown
+
+cps from cursor: 1.8
+cps from grandma: 21
+cps from farm: 152
+cps from mine: 658
+cps from factory: 2340
+Bought factory. Now have 9 factory.
+cps Breakdown
+
+cps from cursor: 1.8
+cps from grandma: 21
+cps from farm: 152
+cps from mine: 658
+cps from factory: 2600
+Bought mine. Now have 14 mine.
+cps Breakdown
+
+cps from cursor: 1.8
+cps from grandma: 21
+cps from farm: 152
+cps from mine: 705
+cps from factory: 2600
+Bought cursor. Now have 18 cursor.
+cps Breakdown
+
+cps from cursor: 1.9000000000000001
+cps from grandma: 21
+cps from farm: 152
+cps from mine: 705
+cps from factory: 2600
+Bought grandma. Now have 21 grandma.
+cps Breakdown
+
+cps from cursor: 1.9000000000000001
+cps from grandma: 22
+cps from farm: 152
+cps from mine: 705
+cps from factory: 2600
+Bought farm. Now have 19 farm.
+cps Breakdown
+
+cps from cursor: 1.9000000000000001
+cps from grandma: 22
+cps from farm: 160
+cps from mine: 705
+cps from factory: 2600
+Bought factory. Now have 10 factory.
+cps Breakdown
+
+cps from cursor: 1.9000000000000001
+cps from grandma: 22
+cps from farm: 160
+cps from mine: 705
+cps from factory: 2860
+Bought mine. Now have 15 mine.
+cps Breakdown
+
+cps from cursor: 1.9000000000000001
+cps from grandma: 22
+cps from farm: 160
+cps from mine: 752
+cps from factory: 2860
+Bought cursor. Now have 19 cursor.
+cps Breakdown
+
+cps from cursor: 2.0
+cps from grandma: 22
+cps from farm: 160
+cps from mine: 752
+cps from factory: 2860
+Bought grandma. Now have 22 grandma.
+cps Breakdown
+
+cps from cursor: 2.0
+cps from grandma: 23
+cps from farm: 160
+cps from mine: 752
+cps from factory: 2860
+Bought farm. Now have 20 farm.
+cps Breakdown
+
+cps from cursor: 2.0
+cps from grandma: 23
+cps from farm: 168
+cps from mine: 752
+cps from factory: 2860
+Bought factory. Now have 11 factory.
+cps Breakdown
+
+cps from cursor: 2.0
+cps from grandma: 23
+cps from farm: 168
+cps from mine: 752
+cps from factory: 3120
+Bought mine. Now have 16 mine.
+cps Breakdown
+
+cps from cursor: 2.0
+cps from grandma: 23
+cps from farm: 168
+cps from mine: 799
+cps from factory: 3120
+Bought cursor. Now have 20 cursor.
+cps Breakdown
+
+cps from cursor: 2.1
+cps from grandma: 23
+cps from farm: 168
+cps from mine: 799
+cps from factory: 3120
+Bought grandma. Now have 23 grandma.
+cps Breakdown
+
+cps from cursor: 2.1
+cps from grandma: 24
+cps from farm: 168
+cps from mine: 799
+cps from factory: 3120
+Bought farm. Now have 21 farm.
+cps Breakdown
+
+cps from cursor: 2.1
+cps from grandma: 24
+cps from farm: 176
+cps from mine: 799
+cps from factory: 3120
+Bought factory. Now have 12 factory.
+cps Breakdown
+
+cps from cursor: 2.1
+cps from grandma: 24
+cps from farm: 176
+cps from mine: 799
+cps from factory: 3380
+Bought mine. Now have 17 mine.
+cps Breakdown
+
+cps from cursor: 2.1
+cps from grandma: 24
+cps from farm: 176
+cps from mine: 846
+cps from factory: 3380
+Bought cursor. Now have 21 cursor.
+cps Breakdown
+
+cps from cursor: 2.2
+cps from grandma: 24
+cps from farm: 176
+cps from mine: 846
+cps from factory: 3380
+Bought grandma. Now have 24 grandma.
+cps Breakdown
+
+cps from cursor: 2.2
+cps from grandma: 25
+cps from farm: 176
+cps from mine: 846
+cps from factory: 3380
+Bought farm. Now have 22 farm.
+cps Breakdown
+
+cps from cursor: 2.2
+cps from grandma: 25
+cps from farm: 184
+cps from mine: 846
+cps from factory: 3380
+Bought factory. Now have 13 factory.
+cps Breakdown
+
+cps from cursor: 2.2
+cps from grandma: 25
+cps from farm: 184
+cps from mine: 846
+cps from factory: 3640
+Bought mine. Now have 18 mine.
+cps Breakdown
+
+cps from cursor: 2.2
+cps from grandma: 25
+cps from farm: 184
+cps from mine: 893
+cps from factory: 3640
+Bought cursor. Now have 22 cursor.
+cps Breakdown
+
+cps from cursor: 2.3000000000000003
+cps from grandma: 25
+cps from farm: 184
+cps from mine: 893
+cps from factory: 3640
+Bought grandma. Now have 25 grandma.
+cps Breakdown
+
+cps from cursor: 2.3000000000000003
+cps from grandma: 26
+cps from farm: 184
+cps from mine: 893
+cps from factory: 3640
+Bought farm. Now have 23 farm.
+cps Breakdown
+
+cps from cursor: 2.3000000000000003
+cps from grandma: 26
+cps from farm: 192
+cps from mine: 893
+cps from factory: 3640
+Bought factory. Now have 14 factory.
