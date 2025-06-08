@@ -357,7 +357,9 @@ active_building_list = [cursor]
 
 #Index at 1 because we assume that cursor is already unlocked
 unlock_index = 1
-complete_building_list = [cursor, grandma, farm, mine, factory]
+complete_building_list = [cursor, grandma, farm, mine, factory, wizard_Tower]
+
+active_upgrade_list = [pointer_0, pointer_1]
 
 
 
