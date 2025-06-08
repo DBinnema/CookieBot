@@ -1,4 +1,3 @@
-from pyautogui import *
 import pyautogui
 import time
 import datetime
@@ -18,21 +17,36 @@ def click(cookie_center_pos):
      pyautogui.click(x=cookie_center_pos[0], y=cookie_center_pos[1])
      time.sleep(0.07)
     
+def debugTemplateMatching(screenImg, template):
+    result = cv2.matchTemplate(screenImg, template, cv2.TM_CCOEFF_NORMED)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+    print(f"Min: {min_val}, Max: {max_val}, Max Location: {max_loc}")
+
+    result_display = result.copy()
+    result_display = cv2.normalize(result_display, None, 0, 255, cv2.NORM_MINMAX)
+    result_display = np.uint8(result_display)
+    cv2.imwrite("debug_result_heatmap.png", result_display)
 
     
     
 def getCenterPosition(screenImg, template):
 
+    #Greyscale both images for better matching
+    screen_gray = cv2.cvtColor(screenImg, cv2.COLOR_BGR2GRAY)
+    template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+
     #The actual search function, returns an image where white pixels are th best match
-    correlation = cv2.matchTemplate(screenImg, template, cv2.TM_CCOEFF_NORMED)
+    correlation = cv2.matchTemplate(screen_gray, template_gray, cv2.TM_CCOEFF_NORMED)
     
     #this gets the whitest and darkest pixels on the result image
     min_value, max_value, min_location, max_location =  cv2.minMaxLoc(correlation)
 
 
-    #print('Confidence: %s' % max_value)
+    print('Confidence: %s' % max_value)
 
-    confidence_Threshhold = 0.8
+    confidence_Threshold = 0.8
+    
     if max_value < confidence_Threshhold:
         print('Did not find template.')
         return (0,0)
@@ -50,6 +64,38 @@ def getCenterPosition(screenImg, template):
     half_h = template.shape[0] //2 
     large_cookie_center_pos = top_left[0] + half_w, top_left[1] + half_h
     return large_cookie_center_pos
+    
+    #Better matching for finding things that may be different scale than the template images
+def findBestScaledMatch(screenImg, template, scale_range=(0.8, 1.2), scale_step=0.05, threshold=0.8):
+    screen_gray = cv2.cvtColor(screenImg, cv2.COLOR_BGR2GRAY)
+    template_gray_orig = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+
+    best_match = (0, (0, 0), None)  # (max_val, location, best_template)
+    for scale in np.arange(scale_range[0], scale_range[1] + scale_step, scale_step):
+        resized_template = cv2.resize(template_gray_orig, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+
+        if resized_template.shape[0] > screen_gray.shape[0] or resized_template.shape[1] > screen_gray.shape[1]:
+            continue  # Skip if the template is larger than the screen
+
+        result = cv2.matchTemplate(screen_gray, resized_template, cv2.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+        print(f"Scale: {scale:.2f}, Confidence: {max_val}")
+
+        if max_val > best_match[0]:
+            best_match = (max_val, max_loc, resized_template)
+
+    print(f"Best scale match confidence: {best_match[0]}, location: {best_match[1]}")
+
+    if best_match[0] < threshold:
+        print("Did not find template at any scale.")
+        return (0, 0)
+
+    top_left = best_match[1]
+    template_used = best_match[2]
+    h, w = template_used.shape[:2]
+    return (top_left[0] + w // 2, top_left[1] + h // 2)
+    
 
 
 class Shop_Item():
@@ -191,6 +237,7 @@ def getCurrentCpS(building_list):
           
           
      return CpS
+     
 
 def recordCookieCount(cookiecount, time , cps):
      file1 = open("point_data.txt", "a")  # append mode
@@ -232,6 +279,8 @@ if respone == 'Close':
 #inital frame
 screenImg = update_Frame()
 
+debugTemplateMatching(screenImg, template)
+
 #Clearing records for new run
 clear_file = open("log.txt", 'w') 
 clear_file.close()
@@ -240,7 +289,18 @@ clear_file = open("point_data.txt", 'w')
 clear_file.close()
 
 #Finding the big cookie, basis for all game
-large_cookie_center_pos = getCenterPosition(screenImg=screenImg, template=template)
+large_cookie_center_pos = findBestScaledMatch(screenImg=screenImg, template=template)
+
+print(template is None)  # Should print False
+#cv2.imshow("Template", template)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+
+
+if large_cookie_center_pos == (0, 0):
+    print("Error: Big Cookie center not found. Closing Bot.")
+    sys.exit()  # Exit the script safely
+
 
 #this click focuses the window on the cookie clicker 
 click(large_cookie_center_pos)
@@ -250,8 +310,8 @@ click(large_cookie_center_pos)
 frame = update_Frame()
 
 #Find the starting store positions
-cursor_Pos = getCenterPosition(screenImg=frame, template=cursor_building)
-grandma_Pos = getCenterPosition(screenImg=frame, template=grandma_building)
+cursor_Pos = findBestScaledMatch(screenImg=frame, template=cursor_building)
+grandma_Pos = findBestScaledMatch(screenImg=frame, template=grandma_building)
 cursor = Building('cursor', 0.1, 15, cursor_Pos)
 grandma = Building('grandma', 1, 100, grandma_Pos)
 
