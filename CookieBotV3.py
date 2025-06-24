@@ -155,11 +155,11 @@ def findBestScaledMatch(screenImg, template, scale_range=(0.8, 1.2), scale_step=
     return (top_left[0] + w // 2, top_left[1] + h // 2)
 
 #Different detection methods for golden cookies
-def find_golden_cookie_blobs(screenImg, min_area=300, max_area=3000, debug=False):
+def find_golden_cookie_blobs(screenImg, min_area=1200, max_area=6000, debug=False):
     hsv = cv2.cvtColor(screenImg, cv2.COLOR_BGR2HSV)
 
     # Gold-like color range — adjust to taste
-    lower_gold = np.array([15, 80, 120])    # broader hue, lower saturation threshold
+    lower_gold = np.array([15, 80, 120])  # broader hue, lower saturation threshold
     upper_gold = np.array([40, 255, 255])
 
     # Create mask for gold
@@ -397,10 +397,28 @@ def printToLog(printstring):
 def upgradeFunc(value, multiplier):
      value *= multiplier
 
+def inspect_hsv_values(image_path):
+     import cv2
+     import numpy as np
+
+     img = cv2.imread(image_path)
+     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+     def mouse_event(event, x, y, flags, param):
+         if event == cv2.EVENT_MOUSEMOVE:
+             pixel = hsv[y, x]
+             print(f"HSV at ({x},{y}): {pixel}")
+
+     cv2.imshow("Inspect HSV", img)
+     cv2.setMouseCallback("Inspect HSV", mouse_event)
+     cv2.waitKey(0)
+     cv2.destroyAllWindows()
 
 
 ##Progrram start
 T = 3600
+#inspect_hsv_values("golden_cookie_blobs_debug.png")
+
 
 #Load the image(s) from file
 
@@ -556,8 +574,8 @@ while keyboard.is_pressed('q') == False:
         golden_cookies = find_golden_cookie_blobs(frame, debug=True)
         if golden_cookies:
             print(f"Found {len(golden_cookies)} golden cookie(s): {golden_cookies}")
-            #for pos in golden_cookies:
-                #pyautogui.click(pos)
+            for pos in golden_cookies:
+                pyautogui.click(pos)
         else:
             print("No golden cookies found.")
 
