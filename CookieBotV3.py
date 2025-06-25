@@ -16,8 +16,10 @@ import re
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import matplotlib.ticker as mticker
 import tkinter as tk
 import threading
+
 SUFFIXES = {
     "million": 1_000_000,
     "billion": 1_000_000_000,
@@ -476,6 +478,13 @@ def log_event(message, timestamp=None, filename="event_log.csv"):
         writer = csv.writer(f)
         writer.writerow([timestamp.isoformat(), message])
 
+def human_format(num):
+    for unit in ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi']:
+        if abs(num) < 1000:
+            return f"{num:.2f}{unit}"
+        num /= 1000
+    return f"{num:.2f}Qi+"
+
 
 ##Progrram start
 T = 3600
@@ -736,7 +745,7 @@ event_df = pd.read_csv("event_log.csv", names=["Timestamp", "Event"], parse_date
 # Define color mapping for known events
 event_colors = {
     "Bot Started": "blue",
-    "Bot Stopped": "black",
+    "Bot Stopped": "red",
     "Golden Cookie Clicked": "gold",
 }
 
@@ -745,6 +754,11 @@ plt.plot(df["Timestamp"], df["Cookies"], label="Cookies")
 
 # Add event markers
 for _, row in event_df.iterrows():
+    #Skipping golden cookie clicks to help remove clutter
+    if row["Event"] == "Golden Cookie Clicked":
+        continue  # Skip this event
+
+
     color = event_colors.get(row["Event"], "red")  # Default to red for unknown events
     plt.axvline(x=row["Timestamp"], color=color, linestyle="--", alpha=0.6)
     plt.text(row["Timestamp"], df["Cookies"].max() * 1.01, row["Event"],
@@ -759,6 +773,15 @@ plt.legend()
 plt.grid(True)
 plt.gcf().autofmt_xdate()
 plt.tight_layout()
+
+#"Human Readable" formatting
+#formatter = mticker.FuncFormatter(lambda x, _: human_format(x))
+#plt.gca().yaxis.set_major_formatter(formatter)
+
+#logrithmic scaling for Cookie Count
+plt.yscale("log")
+plt.ylabel("Cookies (log scale)")
+
 plt.show()
 
 
