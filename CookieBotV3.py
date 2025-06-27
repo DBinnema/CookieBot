@@ -4,8 +4,9 @@ import pyautogui
 import time
 import datetime
 import keyboard
-import random
-import win32api, win32con
+from rapidfuzz import process
+from collections import deque
+from filters.adaptive_mean_filter import AdaptiveMeanFilter
 import cv2
 import numpy as np
 import math
@@ -17,20 +18,77 @@ import re
 import matplotlib.pyplot as plt
 import pandas as pd
 import matplotlib.ticker as mticker
-import tkinter as tk
-import threading
 
-SUFFIXES = {
-    "million": 1_000_000,
-    "billion": 1_000_000_000,
-    "trillion": 1_000_000_000_000,
-    "quadrillion": 1_000_000_000_000_000,
-    "quintillion": 1_000_000_000_000_000_000
-}
 
 from PIL import ImageGrab
 import pytesseract
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+
+from matplotlib import ticker
+
+#Since we will be reading values off the screen with suffixes it is helpful to fomalize the units here
+SUFFIXES = {
+    # Base units
+    "k": 1_000,
+    "thousand": 1_000,
+
+    "m": 1_000_000,
+    "mil": 1_000_000,
+    "million": 1_000_000,
+
+    "b": 1_000_000_000,
+    "bil": 1_000_000_000,
+    "billion": 1_000_000_000,
+
+    "t": 1_000_000_000_000,
+    "tril": 1_000_000_000_000,
+    "trillion": 1_000_000_000_000,
+
+    "qa": 1_000_000_000_000_000,
+    "quad": 1_000_000_000_000_000,
+    "quadrillion": 1_000_000_000_000_000,
+
+    "qi": 1_000_000_000_000_000_000,
+    "quin": 1_000_000_000_000_000_000,
+    "quintillion": 1_000_000_000_000_000_000,
+
+    "sx": 1_000_000_000_000_000_000_000,
+    "sextillion": 1_000_000_000_000_000_000_000,
+
+    "sp": 1_000_000_000_000_000_000_000_000,
+    "septillion": 1_000_000_000_000_000_000_000_000,
+
+    "oc": 1_000_000_000_000_000_000_000_000_000,
+    "octillion": 1_000_000_000_000_000_000_000_000_000,
+
+    "no": 1_000_000_000_000_000_000_000_000_000_000,
+    "nonillion": 1_000_000_000_000_000_000_000_000_000_000,
+
+    "dc": 1_000_000_000_000_000_000_000_000_000_000_000,
+    "decillion": 1_000_000_000_000_000_000_000_000_000_000_000,
+}
+
+# these are the internally recognized "CANONICAL" sufixes
+CANONICAL_SUFFIX = {
+    "k": "thousand", "thousand": "thousand",
+    "m": "million", "mil": "million", "million": "million",
+    "b": "billion", "bil": "billion", "billion": "billion",
+    "t": "trillion", "tril": "trillion", "trillion": "trillion",
+    "qa": "quadrillion", "quad": "quadrillion", "quadrillion": "quadrillion",
+    "qi": "quintillion", "quin": "quintillion", "quintillion": "quintillion",
+    "sx": "sextillion", "sextillion": "sextillion",
+    "sp": "septillion", "septillion": "septillion",
+    "oc": "octillion", "octillion": "octillion",
+    "no": "nonillion", "nonillion": "nonillion",
+    "dc": "decillion", "decillion": "decillion",
+}
+
+def correct_suffix(ocr_suffix, known_suffixes, score_cutoff=80):
+    match, score, _ = process.extractOne(ocr_suffix, known_suffixes, score_cutoff=score_cutoff)
+    if match:
+        return match
+    return None
 
 
 
@@ -38,55 +96,155 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
 
 def get_cookie_count(region=(0, 0, 1400, 170), debug=False):
     try:
-        # Capture screen region and convert to grayscale
+        # Capture the screen region
+        img = np.array(ImageGrab.grab(bbox=region))
+
+        # Convert to grayscale and apply thresholding
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        if debug:
+            cv2.imwrite("debug_cookie_area.png", thresh)
+
+        # Run OCR with a strict whitelist for numbers and punctuation only
+        text = pytesseract.image_to_string(
+            thresh,
+            config='--psm 6 -c tessedit_char_whitelist=0123456789.,'
+        )
+
+        print(f"[OCR Raw Number Text] {repr(text)}")
+
+        # Extract the first numeric pattern found
+        match = re.search(r'[\d.,]+', text)
+        if match:
+            num_str = match.group().replace(',', '')
+            try:
+                num = float(num_str)
+                return num
+            except ValueError:
+                print(f"[OCR WARNING] Failed to convert number: '{num_str}'")
+                return None
+
+        print("[OCR WARNING] No numeric value found in OCR text.")
+        return None
+
+    except Exception as e:
+        print(f"[OCR ERROR] {e}")
+        return None
+
+
+#this is the suffix to the cookies if it exists... million trillion....
+def get_cookie_suffix(region, debug=True):
+    try:
         img = np.array(ImageGrab.grab(bbox=region))
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-        # Save debug image if requested
         if debug:
-            cv2.imwrite("debug_cookie_area.png", thresh)
+            cv2.imwrite("debug_cookie_suffix_area.png", thresh)
 
-        # OCR to read text using only numbers and punctuation
-        text = pytesseract.image_to_string(thresh, config='--psm 6 -c tessedit_char_whitelist=0123456789.,')
-        print(f"[OCR Raw] {repr(text)}")
+        # OCR configured to recognize letters only (suffix)
+        text = pytesseract.image_to_string(
+            thresh,
+            config='--psm 7 -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ '
+        ).lower().strip()
 
-        # Extract first valid number-like match
-        match = re.search(r'[\d,]+(?:\.\d+)?', text)
-        if match:
-            return float(match.group().replace(',', ''))  # Clean and return as float
+        print(f"[OCR Raw Suffix Text] {repr(text)}")
 
-        print("[OCR WARNING] No valid number found in text.")  # Handle bad OCR output
-        return None  # Explicit failure instead of misleading 0.0
+        # Clean OCR text: keep only letters
+        cleaned = ''.join(c for c in text if c.isalpha())
+
+        if not cleaned:
+            print("[OCR WARNING] No suffix letters found.")
+            return None
+
+        canonical = CANONICAL_SUFFIX.get(cleaned)
+        if not canonical:
+            corrected = correct_suffix(cleaned, list(CANONICAL_SUFFIX.keys()))
+            if corrected:
+                canonical = CANONICAL_SUFFIX[corrected]
+                print(f"[OCR FIX] Interpreted '{cleaned}' as '{corrected}' → '{canonical}'")
+
+            else:
+                print(f"[OCR WARNING] Unknown suffix: '{cleaned}'")
+                return None
+
+        return canonical
 
     except Exception as e:
-        print(f"[OCR ERROR] {e}")  # Catch and log unexpected errors
-        return None  # Return failure on error
+        print(f"[OCR ERROR] {e}")
+        return None
+
+
+
+def compute_ocr_regions_from_cookies_box(cookies_box,
+                                         suffix_width=80, suffix_pad=6,
+                                         number_height=40, number_pad=5):
+    left, top, right, bottom = cookies_box
+
+    # Suffix: to the left of the "cookies" word, same vertical range
+    suffix_right = left - suffix_pad
+    suffix_left = max(suffix_right - suffix_width, 0)
+    suffix_top = top
+    suffix_bottom = bottom
+
+    # Number: appears directly above the cookies word
+    number_left = suffix_left
+    number_right = right
+    number_bottom = top - number_pad
+    number_top = max(number_bottom - number_height, 0)
+
+    suffix_region = (suffix_left, suffix_top, suffix_right, suffix_bottom)
+    number_region = (number_left, number_top, number_right, number_bottom)
+
+    return number_region, suffix_region
+
+def read_cookie_count(number_region, suffix_region, last_valid, trusted_drop_ratio=0.5, debug=False):
+    try:
+        number = get_cookie_count(number_region, debug=debug)
+        suffix = get_cookie_suffix(suffix_region, debug=debug)
+
+        if number is None:
+            print("[OCR] No valid number read — using fallback")
+            return last_valid
+
+        # Apply suffix if available
+        if suffix:
+            multiplier = SUFFIXES.get(suffix, 1)
+        else:
+            print("[OCR] No suffix found — assuming raw number")
+            multiplier = 1
+
+        raw_value = number * multiplier
+
+        # Sanity check
+        if last_valid > 0.0 and raw_value < last_valid * trusted_drop_ratio:
+            print(f"[OCR] Suspicious drop from {last_valid} to {raw_value:.2f} — using filter")
+        else:
+            print(f"[OCR] Raw cookie count before filter: {raw_value:.2f}")
+
+        # Pass through mean filter
+        filtered_value = cookie_filter.push(raw_value)
+
+        return filtered_value
+
+    except Exception as e:
+        print(f"[OCR ERROR] Exception in read_cookie_count: {e}")
+        return last_valid
 
 
 
 
+def human_format(num):
+    for unit in ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi']:
+        if abs(num) < 1000:
+            return f"{num:.0f}{unit}"
+        num /= 1000
+    return f"{num:.1f}Qi+"
 
 
-        
-def init_cookie_count_read(cookie_pos):
-    cx, cy = cookie_pos
 
-    # These offsets depend on your screen/UI layout
-    
-    width = 500
-    height = 80
-    
-    shift_x = 200
-    shift_y = 10
-    # Calculate top-left corner based on bottom-right point
-    left = cx - width + shift_x
-    top = cy - height + shift_y
-    right = cx + shift_x
-    bottom = cy + shift_y
 
-    # Define region (left, top, right, bottom)
-    return (left, top, right, bottom)
 
 def record_cookie_count(timestamp, cookie_count, filename="cookie_log.csv"):
     with open(filename, "a") as f:
@@ -128,8 +286,16 @@ def plot_cookie_log_with_events(cookie_log_path="cookie_log.csv", event_log_path
     plt.tight_layout()
     plt.show()
 
-    
-    
+
+
+
+def log_tick_formatter(val, pos=None):
+    if val == 0:
+        return "0"
+    exponent = int(np.log10(val))
+    return f"$10^{exponent}$"
+
+
 
 
 
@@ -138,7 +304,7 @@ def click(click_pos):
      time.sleep(0.07)
      pyautogui.click(x=click_pos[0], y=click_pos[1])
      time.sleep(0.07)
-    
+
 def debugTemplateMatching(screenImg, template):
     result = cv2.matchTemplate(screenImg, template, cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
@@ -149,7 +315,7 @@ def debugTemplateMatching(screenImg, template):
     result_display = cv2.normalize(result_display, None, 0, 255, cv2.NORM_MINMAX)
     result_display = np.uint8(result_display)
     cv2.imwrite("debug_result_heatmap.png", result_display)
-    
+
 def getCenterPosition(screenImg, template, ):
 
     #Greyscale both images for better matching
@@ -158,7 +324,7 @@ def getCenterPosition(screenImg, template, ):
 
     #The actual search function, returns an image where white pixels are th best match
     correlation = cv2.matchTemplate(screen_gray, template_gray, cv2.TM_CCOEFF_NORMED)
-    
+
     #this gets the whitest and darkest pixels on the result image
     min_value, max_value, min_location, max_location =  cv2.minMaxLoc(correlation)
 
@@ -166,7 +332,7 @@ def getCenterPosition(screenImg, template, ):
     print('Confidence: %s' % max_value)
 
     confidence_Threshold = 0.8
-    
+
     if max_value < confidence_Threshold:
         print('Did not find template.')
         return (0,0)
@@ -175,51 +341,71 @@ def getCenterPosition(screenImg, template, ):
         #Setting the click point
         top_left = max_location
         half_w = template.shape[1] //2
-        half_h = template.shape[0] //2 
+        half_h = template.shape[0] //2
         large_cookie_center_pos = top_left[0] + half_w, top_left[1] + half_h
-    
+
     #Setting the click point
     top_left = max_location
     half_w = template.shape[1] //2
-    half_h = template.shape[0] //2 
+    half_h = template.shape[0] //2
     large_cookie_center_pos = top_left[0] + half_w, top_left[1] + half_h
     return large_cookie_center_pos
-    
+
     #Better matching for finding things that may be different scale than the template images
-def findBestScaledMatch(screenImg, template, scale_range=(0.8, 1.2), scale_step=0.05, threshold=0.8):
+def findBestScaledMatch_bbox(screenImg, template, **kwargs):
+    """
+    Wrapper for findBestScaledMatch that returns full bounding box (x, y, w, h).
+    """
     screen_gray = cv2.cvtColor(screenImg, cv2.COLOR_BGR2GRAY)
     template_gray_orig = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
 
     best_match = (0, (0, 0), None)  # (max_val, location, best_template)
+    scale_range = kwargs.get('scale_range', (0.8, 1.2))
+    scale_step = kwargs.get('scale_step', 0.05)
+    threshold = kwargs.get('threshold', 0.8)
+
     for scale in np.arange(scale_range[0], scale_range[1] + scale_step, scale_step):
         resized_template = cv2.resize(template_gray_orig, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
 
         if resized_template.shape[0] > screen_gray.shape[0] or resized_template.shape[1] > screen_gray.shape[1]:
-            continue  # Skip if the template is larger than the screen
+            continue
 
         result = cv2.matchTemplate(screen_gray, resized_template, cv2.TM_CCOEFF_NORMED)
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
 
-        #print(f"Scale: {scale:.2f}, Confidence: {max_val}")
-
-
         if max_val > best_match[0]:
             best_match = (max_val, max_loc, resized_template)
             if max_val > 0.95:
-                print("Found good match, breaking search")
-
-                break  # Very confident match, no need to check further
-
-    print(f"Best scale match confidence: {best_match[0]}, location: {best_match[1]}")
+                break
 
     if best_match[0] < threshold:
         print("Did not find template at any scale.")
-        return (0, 0)
+        return (0, 0, 0, 0)
 
     top_left = best_match[1]
     template_used = best_match[2]
     h, w = template_used.shape[:2]
-    return (top_left[0] + w // 2, top_left[1] + h // 2)
+    print(
+        f"Best match confidence: {best_match[0]:.4f}, location: {best_match[1]}, template size: {resized_template.shape}")
+
+
+    return (top_left[0], top_left[1], top_left[0] + w, top_left[1] + h)
+
+
+def findBestScaledMatch_center(screenImg, template, **kwargs):
+    """
+    Returns center point from a (x1, y1, x2, y2) bounding box.
+    """
+    x1, y1, x2, y2 = findBestScaledMatch_bbox(screenImg, template, **kwargs)
+
+    if x2 - x1 == 0 or y2 - y1 == 0:
+        return (0, 0)  # No match found
+
+    center_x = x1 + (x2 - x1) // 2
+    center_y = y1 + (y2 - y1) // 2
+
+    return (center_x, center_y)
+
 
 #Blob detection for golden cookies
 def find_golden_cookie_blobs(screenImg, min_area=1200, max_area=8000, min_circularity=0.1, debug=False):
@@ -290,26 +476,26 @@ class Shop_Item():
      current_roi = 0
 
      def getTotalCpS(self):
-          
-          return 0
-         
 
-    
+          return 0
+
+
+
      def __init__(self, name, base_cost):
-          self.name = name          
-          self.base_cost = base_cost 
+          self.name = name
+          self.base_cost = base_cost
 
           self.current_roi = self.current_cost/self.base_cps
 
      def getClickPosition(self):
-        return 
+        return
 
-     
-     
+
+
 
      def __str__(self):
           return f'{self.name}'
-     
+
 class Building(Shop_Item):
      def __init__(self, name, base_cps, base_cost, clickPos):
           self.name = name
@@ -318,64 +504,64 @@ class Building(Shop_Item):
           self.base_cost = base_cost
           self.clickPos = clickPos
           self.multiplier = 1
-          
-          
+
+
           self.current_cost = base_cost
           self.current_roi = self.current_cost/self.base_cps
 
      def addAmount(self):
-        self.amount += 1        
+        self.amount += 1
         self.current_cost = int(self.base_cost * 1.15**(self.amount))
         self.current_roi = self.current_cost/self.base_cps
 
      def addMultiplier(self, multiplier):
           self.multiplier *= multiplier
-     
-    
+
+
      def getTotalCpS(self):
           CpS = (self.base_cps * self.amount) * (self.multiplier * 1)
-          
+
           return CpS
 
      def getClickPosition(self):
         return self.clickPos
-     
+
      def getROI(self):
           return self.current_roi
-     
+
 class Upgrade(Shop_Item):
-    
-     
+
+
      def __init__(self, name, base_cost, upgrade_Image, building, multiplier):
-          self.name = name                
+          self.name = name
           self.base_cost = base_cost
-          
+
 
           self.upgradeImage = upgrade_Image
           self.building = building
           self.multiplier = multiplier
-     
-          
-          
-          
+
+
+
+
           self.current_cost = base_cost
-          
+
      def getTotalCpS(self):
-          
+
           return 0
-     
+
 
      def getROI(self):
           roi = self.base_cost/(self.building.amount * self.building.base_cps * self.building.multiplier)
-          
+
           return roi
-     
+
      def addAmount(self):
           #this means the upgrade has been bought
           self.building.addMultiplier(self.multiplier)
 
           #hacky Solution so upgrades never get bought twice
-      
+
           self.base_cost = math.inf
 
 
@@ -384,13 +570,13 @@ class Upgrade(Shop_Item):
 
      def getClickPosition(self):
         shop_Frame = update_Frame()
-       
-        return getCenterPosition(shop_Frame, self.upgradeImage)
-    
-          
 
-    
-def update_Frame():        
+        return getCenterPosition(shop_Frame, self.upgradeImage)
+
+
+
+
+def update_Frame():
     # Take screenshot using PyAutoGUI
     screenshot = pyautogui.screenshot()
     # Convert screenshot to OpenCV format
@@ -402,46 +588,40 @@ def getBestROI(building_list):
      bestBuilding = building_list[0]
      bestCpS = building_list[0].getROI()
      for element in building_list:
-          print('---------------------\n%s RIO: %s s\n---------------------' %(element.name, element.getROI()))         
+          print('---------------------\n%s RIO: %s s\n---------------------' %(element.name, element.getROI()))
           if (element.getROI() < bestCpS):
                bestBuilding=element
                bestCpS = element.getROI()
      return bestBuilding
 
 def getCurrentCpS(building_list):
-     printToLog('cps Breakdown\n')
+
      CpS = 0
      for element in building_list:
 
           thisCpS = element.getTotalCpS()
           CpS += thisCpS
-          printToLog('cps from %s: %s' %(element.name, thisCpS))
-          
-          
+
+
+
      return CpS
-     
-
-def recordCookieCount(cookiecount, time , cps):
-     file1 = open("point_data.txt", "a")  # append mode
-     file1.write('%s, %s, %s\n' % (time, cookiecount, cps))
-     file1.close
-
-def printToLog(printstring):
-    file1 = open("log.txt", "a")  # append mode
-    file1.write('%s\n' % printstring)
-    file1.close()
 
 
 
 
 
-            
+
+
+
+
+
+
 def upgradeFunc(value, multiplier):
      value *= multiplier
 
 def inspect_hsv_values(image_path):
      import cv2
-     import numpy as np
+
 
      img = cv2.imread(image_path)
      hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -478,13 +658,90 @@ def log_event(message, timestamp=None, filename="event_log.csv"):
         writer = csv.writer(f)
         writer.writerow([timestamp.isoformat(), message])
 
-def human_format(num):
-    for unit in ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi']:
-        if abs(num) < 1000:
-            return f"{num:.2f}{unit}"
-        num /= 1000
-    return f"{num:.2f}Qi+"
 
+def human_format(num, pos=None):
+    """
+    Formats a number like:
+    1_000_000 -> 1M
+    1_000_000_000 -> 1B
+    1_000_000_000_000 -> 1T
+    etc.
+    """
+    magnitude = 0
+    original_num = num
+    while abs(num) >= 1000:
+        magnitude += 1
+        num /= 1000.0
+    suffixes = ['', 'K', 'M', 'B', 'T', 'P', 'E']
+    # Format with one decimal if needed
+    if num % 1 == 0:
+        formatted = f'{int(num)}{suffixes[magnitude]}'
+    else:
+        formatted = f'{num:.1f}{suffixes[magnitude]}'
+    return formatted
+
+def draw_debug_regions(img, regions, labels=None, thickness=2):
+    """
+    Draws labeled rectangles on an image.
+    `regions` is a list of (left, top, right, bottom) tuples.
+    `labels` is an optional list of strings.
+    """
+    img_copy = img.copy()
+
+    # Use distinct colors for each box if multiple
+    base_colors = [
+        (0, 255, 0),   # Green
+        (255, 0, 0),   # Blue
+        (0, 255, 255), # Yellow
+        (255, 0, 255), # Magenta
+        (0, 128, 255), # Orange
+    ]
+
+    for i, region in enumerate(regions):
+        left, top, right, bottom = map(int, region)
+        color = base_colors[i % len(base_colors)]
+        cv2.rectangle(img_copy, (left, top), (right, bottom), color, thickness)
+
+        if labels and i < len(labels):
+            label = labels[i]
+
+            # Draw background box for label
+            text_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+            label_w, label_h = text_size
+            label_bg_top_left = (left, top - label_h - 6)
+            label_bg_bottom_right = (left + label_w + 4, top)
+
+            cv2.rectangle(img_copy, label_bg_top_left, label_bg_bottom_right, color, -1)  # Filled label background
+            cv2.putText(img_copy, label, (left + 2, top - 4), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6, (0, 0, 0), 2, cv2.LINE_AA)  # Black text for contrast
+
+    return img_copy
+def draw_debug_points(img, points, labels=None, color=(0, 255, 0), radius=10, thickness=3, font_scale=0.7, font_thickness=2):
+    """
+    Draw points with optional labels on an image.
+
+    Args:
+        img (numpy.ndarray): The image to draw on.
+        points (list of tuples): List of (x, y) coordinates for points.
+        labels (list of str, optional): Labels for each point. If None, no labels are drawn.
+        color (tuple): BGR color of points and text.
+        radius (int): Radius of the circles.
+        thickness (int): Thickness of the circle outline.
+        font_scale (float): Scale of the label font.
+        font_thickness (int): Thickness of the label font.
+
+    Returns:
+        numpy.ndarray: Image with points (and labels) drawn.
+    """
+    img_out = img.copy()
+
+    for i, point in enumerate(points):
+        cv2.circle(img_out, point, radius, color, thickness)
+        if labels and i < len(labels):
+            text_pos = (point[0] + radius + 5, point[1] + radius // 2)  # offset text right/down
+            cv2.putText(img_out, labels[i], text_pos, cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, font_thickness)
+
+    return img_out
 
 ##Progrram start
 T = 3600
@@ -521,27 +778,63 @@ if response == 'Close':
 #inital frame
 screenImg = update_Frame()
 
-debugTemplateMatching(screenImg, template)
-
-
 #Finding the big cookie, basis for all game
-large_cookie_center_pos = findBestScaledMatch(screenImg=screenImg, template=template)
+large_cookie_center_pos = findBestScaledMatch_center(screenImg=screenImg, template=template)
 
 if large_cookie_center_pos == (0, 0):
     print("Error: Big Cookie center not found. Closing Bot.")
     sys.exit()  # Exit the script safely
 
 
-#this click focuses the window on the cookie clicker 
+
+#this click focuses the window on the cookie clicker
 click(large_cookie_center_pos)
 
 
-#once focused take a frame 
+#once focused take a frame
 frame = update_Frame()
+
 
 #Find the starting cookie count region
 print('Looking for cookie word')
-cookie_word_region = findBestScaledMatch(screenImg, word_template)
+cookie_word_region = findBestScaledMatch_bbox(screenImg, word_template)
+
+
+# After detecting "cookies" box...
+#Locate the various read regions
+number_region, suffix_region = compute_ocr_regions_from_cookies_box(
+    cookie_word_region,
+    suffix_width=200,     # ← You can adjust this as needed
+    suffix_pad=5,
+    number_height=40,
+    number_pad=5
+)
+
+regions = [cookie_word_region, number_region, suffix_region]
+labels = ['Cookies Box', 'Number Region', 'Suffix Region']
+
+debug_img = draw_debug_regions(frame, regions, labels=labels)
+debug_img = draw_debug_points(debug_img, [large_cookie_center_pos], labels=["Big Cookie"])
+
+# Save or display the debug image
+cv2.imwrite('debug_startup.png', debug_img)
+print("Saved debug_startup.png with OCR regions and points drawn")
+
+# Then call your OCR functions with these regions
+num = get_cookie_count(number_region, debug=True)
+suffix = get_cookie_suffix(suffix_region, debug=True)
+
+print(f"Returned number: {num}")
+print(f"Returned suffix: '{suffix}'")
+
+if num is not None and suffix is not None:
+    multiplier = SUFFIXES.get(suffix.lower(), 1)
+    final_value = num * multiplier
+    final_value = num * multiplier
+    print(f"Final cookie count: {final_value}")
+else:
+    print("Failed to read cookie count or suffix")
+
 
 
 
@@ -549,8 +842,8 @@ cookie_word_region = findBestScaledMatch(screenImg, word_template)
 
 
 #Find the starting store positions
-cursor_Pos = findBestScaledMatch(screenImg=frame, template=cursor_building)
-grandma_Pos = findBestScaledMatch(screenImg=frame, template=grandma_building)
+cursor_Pos = findBestScaledMatch_center(screenImg=frame, template=cursor_building)
+grandma_Pos = findBestScaledMatch_center(screenImg=frame, template=grandma_building)
 cursor = Building('cursor', 0.1, 15, cursor_Pos)
 grandma = Building('grandma', 1, 100, grandma_Pos)
 
@@ -599,24 +892,33 @@ complete_building_list = [cursor, grandma, farm, mine, factory, wizard_Tower]
 active_upgrade_list = [pointer_0, pointer_1]
 
 
-#reading the screen tests
 
-read_region = init_cookie_count_read(cookie_word_region)
-
-cookie_count = get_cookie_count(read_region)
 
 
 
 #Main Loop variables
-last_valid_cookie_count = 0.0  # Stores the last good OCR result
+
+#filter for properly tracking cookie bank
+cookie_filter = AdaptiveMeanFilter()
+
+#cookie Bank Read
+cookie_count_number = get_cookie_count(number_region, debug=True)
+
+cookie_count_suffix = get_cookie_suffix(suffix_region, debug=True)
+
+last_valid_cookie_count=0.0
+
+last_valid_cookie_count = cookie_count_number  # Stores the last good OCR result
+
+#this is to account for luckmaxing
 spendable_cookie_count = 0.0 # Stores the value above "lucky-maxing"
 
-
-frames_since_last_ocr = 0  # Tracks how many frames since last OCR
 OCR_INTERVAL = 15  # Only do OCR every 15 frames (adjust as needed)
+frames_since_last_ocr = OCR_INTERVAL  # Tracks how many frames since last OCR
 
-frames_since_cookie_search = 0  # Tracks how many frames since last OCR
 COOKIE_SEARCH_INTERVAL = 3  # Only do OCR every 15 frames (adjust as needed)
+frames_since_cookie_search = COOKIE_SEARCH_INTERVAL  # Tracks how many frames since last OCR
+
 
 
 #Uptime Counter
@@ -629,18 +931,12 @@ last_logged_time = datetime.datetime.min # Track last valid timestamp
 
 
 
-
-
-
-
-
-
 while keyboard.is_pressed('q') == False:
-        
-        #Per-frame variables     
+
+        #Per-frame variables
         frameStartTime = time.time()
 
-        #updating the frame imageqqq
+        #updating the frame image
         frame = update_Frame()
 
         frames_since_last_ocr += 1  # Count up each frame
@@ -667,27 +963,19 @@ while keyboard.is_pressed('q') == False:
 
         # Cookie Count Reading
         if frames_since_last_ocr >= OCR_INTERVAL:
-            cookie_count_result = get_cookie_count(read_region)
 
-            if cookie_count_result is not None:
-                if last_valid_cookie_count == 0.0:
-                    # First valid reading
-                    last_valid_cookie_count = cookie_count_result
+            cookie_count = read_cookie_count(
+                number_region,
+                suffix_region,
+                last_valid_cookie_count,
+                trusted_drop_ratio=0.5,
+                debug=True  # Optional: set to True if you want OCR debug images
+            )
 
-                elif cookie_count_result >= last_valid_cookie_count * 0.5:
-                    # Acceptable value (realistic drop or increase)
-                    last_valid_cookie_count = cookie_count_result
-                else:
-                    print(
-                        f"[OCR FILTER] Ignored unrealistic drop: {cookie_count_result} < 50% of {last_valid_cookie_count}")
-                    # Keep last_valid_cookie_count unchanged
-            else:
-                print("[OCR] Falling back to last valid cookie count")
+            print(f"Cookie count: {cookie_count}")
 
             frames_since_last_ocr = 0  # Reset OCR frame timer
 
-        # Always use the last trusted count
-        cookie_count = last_valid_cookie_count
 
 
         #Cookie bank graphing
@@ -708,7 +996,7 @@ while keyboard.is_pressed('q') == False:
 
         while(frameTime < 1):
              #For the rest of this frame, click the cookie
-             
+
              pyautogui.doubleClick(large_cookie_center_pos)
 
 
@@ -716,25 +1004,19 @@ while keyboard.is_pressed('q') == False:
              #check the frame time aiming for 1s frames
              frameCurrentTime = time.time()
              frameTime = (frameCurrentTime - frameStartTime)
-        
+
         current_Time = time.time()
-        current_Runtime = (current_Time - uptime_start)        
+        current_Runtime = (current_Time - uptime_start)
         frameTime = (current_Time - frameStartTime)
 
 
 
 
 
-    
+
 quitTime = time.time()
 delta_Uptime = round(quitTime - uptime_start)
 log_event("Bot Stopped")
-
-print("Cookie Bot quitting...")
-
-
-
-
 # Read cookie data
 df = pd.read_csv(csv_path, parse_dates=["Timestamp"])
 df = df[df["Cookies"] > 0.0]  # Optional: filter out zero cookie counts
@@ -749,40 +1031,90 @@ event_colors = {
     "Golden Cookie Clicked": "gold",
 }
 
+# Find most recent "Bot Started" event
+start_times = event_df[event_df["Event"] == "Bot Started"]["Timestamp"]
+if start_times.empty:
+    print("No 'Bot Started' event found.")
+    exit()
+
+last_start = start_times.max()
+
+# Find the first "Bot Stopped" after that start (if any)
+stop_times = event_df[(event_df["Event"] == "Bot Stopped") & (event_df["Timestamp"] > last_start)]["Timestamp"]
+last_stop = stop_times.min() if not stop_times.empty else df["Timestamp"].max()
+
+# Filter cookie data to only include the current bot run
+df = df[(df["Timestamp"] >= last_start) & (df["Timestamp"] <= last_stop)]
+
+# Create plot and get axis
+fig, ax = plt.subplots()
+
 # Plot cookie count
-plt.plot(df["Timestamp"], df["Cookies"], label="Cookies")
+ax.plot(df["Timestamp"], df["Cookies"], label="Cookies")
 
 # Add event markers
 for _, row in event_df.iterrows():
-    #Skipping golden cookie clicks to help remove clutter
-    if row["Event"] == "Golden Cookie Clicked":
-        continue  # Skip this event
-
+    if row["Timestamp"] < last_start or row["Timestamp"] > last_stop:
+        continue
 
     color = event_colors.get(row["Event"], "red")  # Default to red for unknown events
-    plt.axvline(x=row["Timestamp"], color=color, linestyle="--", alpha=0.6)
-    plt.text(row["Timestamp"], df["Cookies"].max() * 1.01, row["Event"],
-             rotation=90, fontsize=8, ha='right', va='bottom', color=color)
+    ax.axvline(x=row["Timestamp"], color=color, linestyle="--", alpha=0.6)
+
+    label = "G" if row["Event"] == "Bot Started" else ("S" if row["Event"] == "Bot Stopped" else row["Event"])
+    ax.text(row["Timestamp"], df["Cookies"].max() * 1.01, label,
+            rotation=90, fontsize=6, ha='right', va='bottom', color=color)
+
+ax.set_xlabel("Time")
+ax.set_ylabel("Cookies")
+ax.set_title("Cookie Bank Over Time")
+ax.legend()
+ax.grid(True)
+fig.autofmt_xdate()
+plt.subplots_adjust(bottom=0.2, top=0.9)
+
+# Set log scale on y-axis
+ax.set_yscale('log')
+ax.set_ylabel("Cookies (log scale)")
+
+# Set custom human-readable formatter using your function
+formatter = mticker.FuncFormatter(human_format)
+ax.yaxis.set_major_formatter(formatter)
 
 
-
-plt.xlabel("Time")
-plt.ylabel("Cookies")
-plt.title("Cookie Bank Over Time")
-plt.legend()
-plt.grid(True)
-plt.gcf().autofmt_xdate()
-plt.tight_layout()
-
-#"Human Readable" formatting
-#formatter = mticker.FuncFormatter(lambda x, _: human_format(x))
-#plt.gca().yaxis.set_major_formatter(formatter)
-
-#logrithmic scaling for Cookie Count
+# Logarithmic scaling for Cookie Count
 plt.yscale("log")
 plt.ylabel("Cookies (log scale)")
 
+# Dynamically compute min and max, add padding to max
+min_cookies = max(1, df["Cookies"].min())
+max_cookies = df["Cookies"].max() * 1.2  # 20% padding so line doesn't hug top
+
+# Calculate nice log ticks covering full data range
+log_min = int(np.floor(np.log10(min_cookies)))
+log_max = int(np.ceil(np.log10(max_cookies)))
+ticks = [10 ** i for i in range(log_min, log_max + 1)]
+
+plt.yscale("log")
+plt.ylabel("Cookies (log scale)")
+
+# Dynamically calculate good log-scale tick marks
+min_cookies = max(1, df["Cookies"].min())
+max_cookies = df["Cookies"].max()
+log_min = int(np.floor(np.log10(min_cookies)))
+log_max = int(np.ceil(np.log10(max_cookies)))
+ticks = [10 ** i for i in range(log_min, log_max + 1)]
+
+plt.gca().set_yticks(ticks)
+plt.gca().yaxis.set_major_formatter(formatter)
+
+# Layout tweaks to avoid overlapping labels
+plt.subplots_adjust(bottom=0.2, top=0.9)
+
+# Finally, show the plot
 plt.show()
+
+print("Cookie Bot quitting...")
+
 
 
 
