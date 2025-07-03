@@ -94,7 +94,7 @@ def correct_suffix(ocr_suffix, known_suffixes, score_cutoff=80):
 
 
 
-def get_cookie_count(region=(0, 0, 1400, 170), debug=False):
+def get_number_from_region(region=(0, 0, 1400, 170), debug=False):
     try:
         # Capture the screen region
         img = np.array(ImageGrab.grab(bbox=region))
@@ -133,8 +133,9 @@ def get_cookie_count(region=(0, 0, 1400, 170), debug=False):
         return None
 
 
+
 #this is the suffix to the cookies if it exists... million trillion....
-def get_cookie_suffix(region, debug=True):
+def get_suffix_from_region(region, debug=True):
     try:
         img = np.array(ImageGrab.grab(bbox=region))
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -179,7 +180,9 @@ def get_cookie_suffix(region, debug=True):
 
 def compute_ocr_regions_from_cookies_box(cookies_box,
                                          suffix_width=80, suffix_pad=6,
-                                         number_height=40, number_pad=5):
+                                         number_height=40, number_pad=5,
+                                         cps_height=15, cps_pad=0,
+                                         cps_suffix_width=97, cps_suffix_pad=0):
     left, top, right, bottom = cookies_box
 
     # Suffix: to the left of the "cookies" word, same vertical range
@@ -194,15 +197,29 @@ def compute_ocr_regions_from_cookies_box(cookies_box,
     number_bottom = top - number_pad
     number_top = max(number_bottom - number_height, 0)
 
+    # CpS line: appears below the cookies word
+    cps_top = bottom + cps_pad
+    cps_bottom = cps_top + cps_height
+
+    # CpS suffix is on the right, CpS number on the left
+    cps_suffix_right = right
+    cps_suffix_left = max(cps_suffix_right - cps_suffix_width, 0)
+
+    cps_number_left = number_left
+    cps_number_right = cps_suffix_left - cps_suffix_pad
+
+    cps_number_region = (cps_number_left, cps_top, cps_number_right, cps_bottom)
+    cps_suffix_region = (cps_suffix_left, cps_top, cps_suffix_right, cps_bottom)
+
     suffix_region = (suffix_left, suffix_top, suffix_right, suffix_bottom)
     number_region = (number_left, number_top, number_right, number_bottom)
 
-    return number_region, suffix_region
+    return number_region, suffix_region, cps_number_region, cps_suffix_region
 
 def read_cookie_count(number_region, suffix_region, last_valid, trusted_drop_ratio=0.5, debug=False):
     try:
-        number = get_cookie_count(number_region, debug=debug)
-        suffix = get_cookie_suffix(suffix_region, debug=debug)
+        number = get_number_from_region(number_region, debug=debug)
+        suffix = get_suffix_from_region(suffix_region, debug=debug)
 
         if number is None:
             print("[OCR] No valid number read — using fallback")
@@ -466,113 +483,90 @@ def find_golden_cookie_blobs(screenImg, min_area=1200, max_area=8000, min_circul
 
 
 
-class Shop_Item():
-     name = ''
-     amount = 0
-     base_cost = 0
-     base_cps = 0.0
+class ShopItem:
+    def __init__(self, name, base_cost):
+        self.name = name
+        self.amount = 0
+        self.base_cost = base_cost
+        self.base_cps = 0.0
+        self.current_cost = base_cost
+        self.current_roi = float('inf')  # Avoid division by zero
 
-     current_cost = 0.0
-     current_roi = 0
+    def get_total_cps(self):
+        return 0
 
-     def getTotalCpS(self):
+    def get_click_position(self):
+        return None
 
-          return 0
+    def __str__(self):
+        return f'{self.name}'
 
+class Building(ShopItem):
+    def __init__(self, name, base_cps, base_cost, click_pos, pointer_template):
+        super().__init__(name, base_cost)
+        self.base_cps = base_cps
+        self.click_pos = click_pos
+        self.multiplier = 1.0
 
-
-     def __init__(self, name, base_cost):
-          self.name = name
-          self.base_cost = base_cost
-
-          self.current_roi = self.current_cost/self.base_cps
-
-     def getClickPosition(self):
-        return
-
-
-
-
-     def __str__(self):
-          return f'{self.name}'
-
-class Building(Shop_Item):
-     def __init__(self, name, base_cps, base_cost, clickPos):
-          self.name = name
-          self.amount = 0
-          self.base_cps = base_cps
-          self.base_cost = base_cost
-          self.clickPos = clickPos
-          self.multiplier = 1
-
-
-          self.current_cost = base_cost
-          self.current_roi = self.current_cost/self.base_cps
-
-     def addAmount(self):
-        self.amount += 1
-        self.current_cost = int(self.base_cost * 1.15**(self.amount))
-        self.current_roi = self.current_cost/self.base_cps
-
-     def addMultiplier(self, multiplier):
-          self.multiplier *= multiplier
-
-
-     def getTotalCpS(self):
-          CpS = (self.base_cps * self.amount) * (self.multiplier * 1)
-
-          return CpS
-
-     def getClickPosition(self):
-        return self.clickPos
-
-     def getROI(self):
-          return self.current_roi
-
-class Upgrade(Shop_Item):
-
-
-     def __init__(self, name, base_cost, upgrade_Image, building, multiplier):
-          self.name = name
-          self.base_cost = base_cost
-
-
-          self.upgradeImage = upgrade_Image
-          self.building = building
-          self.multiplier = multiplier
+        # OCR-related
+        self.pointer_template = pointer_template
+        self.number_region = None
+        self.suffix_region = None
+        self.last_cost_read = base_cost
 
 
 
+    def update_ocr_regions(self, screen_img):
+        # Find pointer location
+        bbox = findBestScaledMatch_bbox(screen_img, self.pointer_template)
+        if bbox == (0, 0, 0, 0):
+            print(f"[WARN] Could not find template for {self.name}")
+            return
 
-          self.current_cost = base_cost
+        # Compute OCR regions
+        number_region, suffix_region, *_ = compute_ocr_regions_from_cookies_box(
+            bbox,
+            suffix_width=200,
+            suffix_pad=5,
+            number_height=40,
+            number_pad=5
+        )
 
-     def getTotalCpS(self):
+        self.number_region = number_region
+        self.suffix_region = suffix_region
 
-          return 0
+    def read_current_cost(self, debug=False):
+        if self.number_region is None or self.suffix_region is None:
+            print(f"[OCR] Regions not set for {self.name}, skipping read.")
+            return self.last_cost_read
 
+        cost = read_cookie_count(self.number_region, self.suffix_region, self.last_cost_read, debug=debug)
+        self.last_cost_read = cost
+        self.current_cost = cost
 
-     def getROI(self):
-          roi = self.base_cost/(self.building.amount * self.building.base_cps * self.building.multiplier)
+        return cost
 
-          return roi
+class Upgrade(ShopItem):
+    def __init__(self, name, base_cost, upgrade_image, building, multiplier):
+        super().__init__(name, base_cost)
+        self.upgrade_image = upgrade_image
+        self.building = building
+        self.multiplier = multiplier
 
-     def addAmount(self):
-          #this means the upgrade has been bought
-          self.building.addMultiplier(self.multiplier)
+    def get_total_cps(self):
+        return 0
 
-          #hacky Solution so upgrades never get bought twice
+    def get_roi(self):
+        cps_contrib = self.building.amount * self.building.base_cps * self.building.multiplier
+        return self.base_cost / (cps_contrib or 1)
 
-          self.base_cost = math.inf
+    def add_amount(self):
+        self.building.add_multiplier(self.multiplier)
+        self.base_cost = math.inf  # Prevent future purchase
 
-
-          return
-
-
-     def getClickPosition(self):
-        shop_Frame = update_Frame()
-
-        return getCenterPosition(shop_Frame, self.upgradeImage)
-
+    def get_click_position(self):
+        shop_frame = update_Frame()
+        return getCenterPosition(shop_frame, self.upgrade_image)
 
 
 
@@ -758,10 +752,10 @@ word_template = cv2.imread('Images/cookies_word.png')
 
 
 #These two are used to find the store spacing
-cursor_building = cv2.imread('Images/Buildings/cursor_blackout.png')
-grandma_building = cv2.imread('Images/Buildings/grandma_blackout.png')
-pointer_upgrade_Image = cv2.imread('Images/pointer_Upgrade.png')
-pointer_upgrade_1_Image = cv2.imread('Images/pointer_Upgrade_1.png')
+cursor_building = cv2.imread('Images/Buildings/cursor.png')
+grandma_building = cv2.imread('Images/Buildings/grandma.png')
+#pointer_upgrade_Image = cv2.imread('Images/pointer_Upgrade.png')
+#pointer_upgrade_1_Image = cv2.imread('Images/pointer_Upgrade_1.png')
 
 print('Images loaded! \n')
 
@@ -802,7 +796,7 @@ cookie_word_region = findBestScaledMatch_bbox(screenImg, word_template)
 
 # After detecting "cookies" box...
 #Locate the various read regions
-number_region, suffix_region = compute_ocr_regions_from_cookies_box(
+number_region, suffix_region, cps_number_region, cps_suffix_region = compute_ocr_regions_from_cookies_box(
     cookie_word_region,
     suffix_width=200,     # ← You can adjust this as needed
     suffix_pad=5,
@@ -810,8 +804,8 @@ number_region, suffix_region = compute_ocr_regions_from_cookies_box(
     number_pad=5
 )
 
-regions = [cookie_word_region, number_region, suffix_region]
-labels = ['Cookies Box', 'Number Region', 'Suffix Region']
+regions = [cookie_word_region, number_region, suffix_region, cps_number_region, cps_suffix_region]
+labels = ['Cookies Box', 'Number Region', 'Suffix Region', "CPS number", "CPS suffix"]
 
 debug_img = draw_debug_regions(frame, regions, labels=labels)
 debug_img = draw_debug_points(debug_img, [large_cookie_center_pos], labels=["Big Cookie"])
@@ -821,75 +815,82 @@ cv2.imwrite('debug_startup.png', debug_img)
 print("Saved debug_startup.png with OCR regions and points drawn")
 
 # Then call your OCR functions with these regions
-num = get_cookie_count(number_region, debug=True)
-suffix = get_cookie_suffix(suffix_region, debug=True)
+num = get_number_from_region(number_region, debug=True)
+suffix = get_suffix_from_region(suffix_region, debug=True)
 
-print(f"Returned number: {num}")
-print(f"Returned suffix: '{suffix}'")
 
+last_valid_cookie_count=0.0
 if num is not None and suffix is not None:
     multiplier = SUFFIXES.get(suffix.lower(), 1)
     final_value = num * multiplier
     final_value = num * multiplier
-    print(f"Final cookie count: {final_value}")
+    last_valid_cookie_count = final_value
+
+    print(f"Setting last valid cookie count: {final_value}")
 else:
     print("Failed to read cookie count or suffix")
 
 
+#Buildings and store positions
+
+# Setup (run once)
+cursor_building = Building(
+    name="Cursor",
+    base_cps=0.1,
+    base_cost=15,
+    click_pos=(100, 500),
+    pointer_template=cv2.imread("Images/Buildings/cursor.png")
+)
+
+screen_img = update_Frame()  # Assume you already have this function
+cursor_building.update_ocr_regions(screen_img)
+
+# Read cost and update
+cursor_building.read_current_cost(debug=True)
+print(f"{cursor_building.name} cost: {cursor_building.current_cost:.2f}")
 
 
 
 
 
-#Find the starting store positions
-cursor_Pos = findBestScaledMatch_center(screenImg=frame, template=cursor_building)
-grandma_Pos = findBestScaledMatch_center(screenImg=frame, template=grandma_building)
-cursor = Building('cursor', 0.1, 15, cursor_Pos)
-grandma = Building('grandma', 1, 100, grandma_Pos)
 
-#Now that the first two store has been found hopefully we can calculate the next store positions
+#farm = Building('farm',8, 1100, (previousStorePos[0], previousStorePos[1]+ offset ))
+#previousStorePos = farm.clickPos
 
+#mine = Building('mine',47, 12000, (previousStorePos[0], previousStorePos[1]+ offset ))
+#previousStorePos = mine.clickPos
 
-offset = grandma.clickPos[1] - cursor.clickPos[1]
-previousStorePos = grandma.clickPos
+#factory = Building('factory',260, 130000, (previousStorePos[0], previousStorePos[1]+ offset ))
+#previousStorePos = factory.clickPos
 
-#Defining Buildings
-farm = Building('farm',8, 1100, (previousStorePos[0], previousStorePos[1]+ offset ))
-previousStorePos = farm.clickPos
+#bank = Building('bank',1400, 1400000, (previousStorePos[0], previousStorePos[1]+ offset ))
+#previousStorePos = bank.clickPos
 
-mine = Building('mine',47, 12000, (previousStorePos[0], previousStorePos[1]+ offset ))
-previousStorePos = mine.clickPos
+#temple = Building('temple', 7800, 12000000, (previousStorePos[0], previousStorePos[1]+ offset ))
+#previousStorePos = temple.clickPos
 
-factory = Building('factory',260, 130000, (previousStorePos[0], previousStorePos[1]+ offset ))
-previousStorePos = factory.clickPos
-
-bank = Building('bank',1400, 1400000, (previousStorePos[0], previousStorePos[1]+ offset ))
-previousStorePos = bank.clickPos
-
-temple = Building('temple', 7800, 12000000, (previousStorePos[0], previousStorePos[1]+ offset ))
-previousStorePos = temple.clickPos
-
-wizard_Tower = Building('wizard tower', 44000, 330000000, (previousStorePos[0], previousStorePos[1]+ offset ))
-previousStorePos = temple.clickPos
+#wizard_Tower = Building('wizard tower', 44000, 330000000, (previousStorePos[0], previousStorePos[1]+ offset ))
+#previousStorePos = temple.clickPos
 
 
 #Defining Upgrades
 
-pointer_0 = Upgrade('pointer_0_upgrade', 100, pointer_upgrade_Image, cursor, 2.0)
-pointer_1 = Upgrade('pointer_1_upgrade', 500, pointer_upgrade_Image, cursor, 2.0)
+#pointer_0 = Upgrade('pointer_0_upgrade', 100, pointer_upgrade_Image, cursor, 2.0)
+#pointer_1 = Upgrade('pointer_1_upgrade', 500, pointer_upgrade_Image, cursor, 2.0)
 
 
 
 
 
 
-active_building_list = [cursor]
+active_building_list = [cursor_building]
 
 #Index at 1 because we assume that cursor is already unlocked
-unlock_index = 1
-complete_building_list = [cursor, grandma, farm, mine, factory, wizard_Tower]
+complete_building_list = [cursor_building]
 
-active_upgrade_list = [pointer_0, pointer_1]
+
+
+
 
 
 
@@ -901,22 +902,24 @@ active_upgrade_list = [pointer_0, pointer_1]
 #filter for properly tracking cookie bank
 cookie_filter = AdaptiveMeanFilter()
 
-#cookie Bank Read
-cookie_count_number = get_cookie_count(number_region, debug=True)
+#filter for cps
+cps_filter = AdaptiveMeanFilter()
 
-cookie_count_suffix = get_cookie_suffix(suffix_region, debug=True)
 
-last_valid_cookie_count=0.0
+cps_number = get_number_from_region(cps_number_region, debug=True)
+cps_suffix = get_suffix_from_region(cps_suffix_region, debug=True)
+#cps_last_trused = cps_filter.push(cps_number*cps_suffix)
+#print("I read cps as " + cps_last_trused)
 
-last_valid_cookie_count = cookie_count_number  # Stores the last good OCR result
 
-#this is to account for luckmaxing
+
+#this is to account for luckmaxing which is 100mins of CPS**** (CPS * 60 *100)
 spendable_cookie_count = 0.0 # Stores the value above "lucky-maxing"
 
 OCR_INTERVAL = 15  # Only do OCR every 15 frames (adjust as needed)
 frames_since_last_ocr = OCR_INTERVAL  # Tracks how many frames since last OCR
 
-COOKIE_SEARCH_INTERVAL = 3  # Only do OCR every 15 frames (adjust as needed)
+COOKIE_SEARCH_INTERVAL = 3  # Only do cookie search (adjust as needed)
 frames_since_cookie_search = COOKIE_SEARCH_INTERVAL  # Tracks how many frames since last OCR
 
 
