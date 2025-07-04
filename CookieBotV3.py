@@ -478,6 +478,31 @@ def find_golden_cookie_blobs(screenImg, min_area=1200, max_area=8000, min_circul
 
     return golden_cookies
 
+def compute_ocr_regions_shop(bbox,
+                             number_width=80,        # ← new parameter
+                             suffix_width=80,
+                             suffix_pad=5,
+                             number_height=20,
+                             number_pad=2):
+    left, top, right, bottom = bbox
+
+    # Position the number region *below* the detected box
+    number_top = bottom + number_pad
+    number_bottom = number_top + number_height
+    number_left = left
+    number_right = number_left + number_width   # ← use custom width
+
+    # Position the suffix region to the right of the number region
+    suffix_left = number_right + suffix_pad
+    suffix_right = suffix_left + suffix_width
+    suffix_top = number_top
+    suffix_bottom = number_bottom
+
+    number_region = (number_left, number_top, number_right, number_bottom)
+    suffix_region = (suffix_left, suffix_top, suffix_right, suffix_bottom)
+
+    return number_region, suffix_region
+
 
 
 
@@ -524,12 +549,12 @@ class Building(ShopItem):
             return
 
         # Compute OCR regions
-        number_region, suffix_region, *_ = compute_ocr_regions_from_cookies_box(
+        number_region, suffix_region, *_ = compute_ocr_regions_shop(
             bbox,
-            suffix_width=200,
-            suffix_pad=5,
-            number_height=40,
-            number_pad=5
+            suffix_width=100,
+            suffix_pad=1,
+            number_height=18,
+            number_pad=1
         )
 
         self.number_region = number_region
@@ -792,8 +817,6 @@ frame = update_Frame()
 #Find the starting cookie count region
 print('Looking for cookie word')
 cookie_word_region = findBestScaledMatch_bbox(screenImg, word_template)
-
-
 # After detecting "cookies" box...
 #Locate the various read regions
 number_region, suffix_region, cps_number_region, cps_suffix_region = compute_ocr_regions_from_cookies_box(
@@ -804,11 +827,31 @@ number_region, suffix_region, cps_number_region, cps_suffix_region = compute_ocr
     number_pad=5
 )
 
-regions = [cookie_word_region, number_region, suffix_region, cps_number_region, cps_suffix_region]
-labels = ['Cookies Box', 'Number Region', 'Suffix Region', "CPS number", "CPS suffix"]
+# Setup (run once)
+cursor_building = Building(
+    name="Cursor",
+    base_cps=0.1,
+    base_cost=15,
+    click_pos=(100, 500),
+
+    pointer_template=cv2.imread("Images/Buildings/cursor.png")
+)
+
+
+cursor_building.update_ocr_regions(frame)
+
+cursor_number_region = cursor_building.number_region
+cost_suffix = cursor_building.suffix_region
+
+
+regions = [cookie_word_region, number_region, suffix_region, cps_number_region, cps_suffix_region, cursor_number_region, cost_suffix]
+labels = ['Cookies Box', 'Number Region', 'Suffix Region', "CPS number", "CPS suffix", "Cost Number","Cost Suffix"]
 
 debug_img = draw_debug_regions(frame, regions, labels=labels)
 debug_img = draw_debug_points(debug_img, [large_cookie_center_pos], labels=["Big Cookie"])
+
+
+
 
 # Save or display the debug image
 cv2.imwrite('debug_startup.png', debug_img)
@@ -833,17 +876,7 @@ else:
 
 #Buildings and store positions
 
-# Setup (run once)
-cursor_building = Building(
-    name="Cursor",
-    base_cps=0.1,
-    base_cost=15,
-    click_pos=(100, 500),
-    pointer_template=cv2.imread("Images/Buildings/cursor.png")
-)
 
-screen_img = update_Frame()  # Assume you already have this function
-cursor_building.update_ocr_regions(screen_img)
 
 # Read cost and update
 cursor_building.read_current_cost(debug=True)
@@ -873,26 +906,10 @@ print(f"{cursor_building.name} cost: {cursor_building.current_cost:.2f}")
 #previousStorePos = temple.clickPos
 
 
-#Defining Upgrades
-
-#pointer_0 = Upgrade('pointer_0_upgrade', 100, pointer_upgrade_Image, cursor, 2.0)
-#pointer_1 = Upgrade('pointer_1_upgrade', 500, pointer_upgrade_Image, cursor, 2.0)
-
-
-
-
-
-
 active_building_list = [cursor_building]
 
 #Index at 1 because we assume that cursor is already unlocked
 complete_building_list = [cursor_building]
-
-
-
-
-
-
 
 
 
