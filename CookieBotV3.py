@@ -5,8 +5,9 @@ import time
 import datetime
 import keyboard
 from rapidfuzz import process
-from collections import deque
-from filters.adaptive_mean_filter import AdaptiveMeanFilter
+
+from tracking.adaptive_mean_filter import AdaptiveMeanFilter
+from tracking.tracked_value import TrackedValue
 import cv2
 import numpy as np
 import math
@@ -178,20 +179,23 @@ def get_suffix_from_region(region, debug=True):
 
 
 
-def compute_ocr_regions_from_cookies_box(cookies_box,
-                                         suffix_width=80, suffix_pad=6,
-                                         number_height=40, number_pad=5,
-                                         cps_height=15, cps_pad=0,
-                                         cps_suffix_width=97, cps_suffix_pad=0):
+def compute_ocr_regions_cookie_count(
+    cookies_box,
+    suffix_width=80, suffix_pad=6,
+    number_height=40, number_pad=5,
+    cps_height=15, cps_pad=0,
+    cps_suffix_width=100, cps_suffix_pad=50,
+    cps_number_width=100  # ← NEW PARAM
+):
     left, top, right, bottom = cookies_box
 
-    # Suffix: to the left of the "cookies" word, same vertical range
+    # Suffix: to the left of the "cookies" word
     suffix_right = left - suffix_pad
     suffix_left = max(suffix_right - suffix_width, 0)
     suffix_top = top
     suffix_bottom = bottom
 
-    # Number: appears directly above the cookies word
+    # Number: directly above the "cookies" word
     number_left = suffix_left
     number_right = right
     number_bottom = top - number_pad
@@ -201,12 +205,13 @@ def compute_ocr_regions_from_cookies_box(cookies_box,
     cps_top = bottom + cps_pad
     cps_bottom = cps_top + cps_height
 
-    # CpS suffix is on the right, CpS number on the left
+    # CpS suffix is anchored to the right
     cps_suffix_right = right
     cps_suffix_left = max(cps_suffix_right - cps_suffix_width, 0)
 
-    cps_number_left = number_left
+    # CpS number is to the left of the suffix with a fixed width
     cps_number_right = cps_suffix_left - cps_suffix_pad
+    cps_number_left = max(cps_number_right - cps_number_width, 0)
 
     cps_number_region = (cps_number_left, cps_top, cps_number_right, cps_bottom)
     cps_suffix_region = (cps_suffix_left, cps_top, cps_suffix_right, cps_bottom)
@@ -216,40 +221,33 @@ def compute_ocr_regions_from_cookies_box(cookies_box,
 
     return number_region, suffix_region, cps_number_region, cps_suffix_region
 
-def read_cookie_count(number_region, suffix_region, last_valid, trusted_drop_ratio=0.5, debug=False):
+
+def read_filtered_value(number_region, suffix_region, value_filter, debug=False):
     try:
-        number = get_number_from_region(number_region, debug=debug)
-        suffix = get_suffix_from_region(suffix_region, debug=debug)
+        raw_value = interpret_number_with_suffix(number_region, suffix_region, debug=debug)
 
-        if number is None:
-            print("[OCR] No valid number read — using fallback")
-            return last_valid
+        if raw_value is None:
+            print("[OCR] Falling back to last known value")
+            return value_filter.last()
 
-        # Apply suffix if available
-        if suffix:
-            multiplier = SUFFIXES.get(suffix, 1)
-        else:
-            print("[OCR] No suffix found — assuming raw number")
-            multiplier = 1
-
-        raw_value = number * multiplier
-
-        # Sanity check
-        if last_valid > 0.0 and raw_value < last_valid * trusted_drop_ratio:
-            print(f"[OCR] Suspicious drop from {last_valid} to {raw_value:.2f} — using filter")
-        else:
-            print(f"[OCR] Raw cookie count before filter: {raw_value:.2f}")
-
-        # Pass through mean filter
-        filtered_value = cookie_filter.push(raw_value)
-
-        return filtered_value
+        print(f"[OCR] Value before filter: {raw_value:.2f}")
+        return value_filter.filter(raw_value)
 
     except Exception as e:
-        print(f"[OCR ERROR] Exception in read_cookie_count: {e}")
-        return last_valid
+        print(f"[OCR ERROR] Exception in read value: {e}")
+        return value_filter.last()
 
 
+def interpret_number_with_suffix(number_region, suffix_region, debug=False):
+    number = get_number_from_region(number_region, debug=debug)
+    suffix = get_suffix_from_region(suffix_region, debug=debug)
+
+    if number is None:
+        print("[OCR] No valid number read")
+        return None
+
+    multiplier = SUFFIXES.get(suffix, 1) if suffix else 1
+    return number * multiplier
 
 
 def human_format(num):
@@ -318,9 +316,9 @@ def log_tick_formatter(val, pos=None):
 
 def click(click_pos):
      pyautogui.moveTo(x=click_pos[0], y=click_pos[1])
-     time.sleep(0.07)
+     time.sleep(0.04)
      pyautogui.click(x=click_pos[0], y=click_pos[1])
-     time.sleep(0.07)
+     time.sleep(0.04)
 
 def debugTemplateMatching(screenImg, template):
     result = cv2.matchTemplate(screenImg, template, cv2.TM_CCOEFF_NORMED)
@@ -333,40 +331,7 @@ def debugTemplateMatching(screenImg, template):
     result_display = np.uint8(result_display)
     cv2.imwrite("debug_result_heatmap.png", result_display)
 
-def getCenterPosition(screenImg, template, ):
 
-    #Greyscale both images for better matching
-    screen_gray = cv2.cvtColor(screenImg, cv2.COLOR_BGR2GRAY)
-    template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
-
-    #The actual search function, returns an image where white pixels are th best match
-    correlation = cv2.matchTemplate(screen_gray, template_gray, cv2.TM_CCOEFF_NORMED)
-
-    #this gets the whitest and darkest pixels on the result image
-    min_value, max_value, min_location, max_location =  cv2.minMaxLoc(correlation)
-
-
-    print('Confidence: %s' % max_value)
-
-    confidence_Threshold = 0.8
-
-    if max_value < confidence_Threshold:
-        print('Did not find template.')
-        return (0,0)
-    else:
-        print('Found template with %s confidence.' % max_value)
-        #Setting the click point
-        top_left = max_location
-        half_w = template.shape[1] //2
-        half_h = template.shape[0] //2
-        large_cookie_center_pos = top_left[0] + half_w, top_left[1] + half_h
-
-    #Setting the click point
-    top_left = max_location
-    half_w = template.shape[1] //2
-    half_h = template.shape[0] //2
-    large_cookie_center_pos = top_left[0] + half_w, top_left[1] + half_h
-    return large_cookie_center_pos
 
     #Better matching for finding things that may be different scale than the template images
 def findBestScaledMatch_bbox(screenImg, template, **kwargs):
@@ -478,6 +443,7 @@ def find_golden_cookie_blobs(screenImg, min_area=1200, max_area=8000, min_circul
 
     return golden_cookies
 
+#This locates the area for ocr based off the pattern mached name of the building
 def compute_ocr_regions_shop(bbox,
                              number_width=80,        # ← new parameter
                              suffix_width=80,
@@ -527,8 +493,9 @@ class ShopItem:
         return f'{self.name}'
 
 class Building(ShopItem):
-    def __init__(self, name, base_cps, base_cost, click_pos, pointer_template):
+    def __init__(self, name, base_cps, base_cost, click_pos, pointer_template, filter):
         super().__init__(name, base_cost)
+        self.filter = filter
         self.base_cps = base_cps
         self.click_pos = click_pos
         self.multiplier = 1.0
@@ -564,12 +531,23 @@ class Building(ShopItem):
         if self.number_region is None or self.suffix_region is None:
             print(f"[OCR] Regions not set for {self.name}, skipping read.")
             return self.last_cost_read
+        try:
+            raw_value = interpret_number_with_suffix(number_region, suffix_region, debug=debug)
 
-        cost = read_cookie_count(self.number_region, self.suffix_region, self.last_cost_read, debug=debug)
-        self.last_cost_read = cost
-        self.current_cost = cost
+            if raw_value is None:
+                print("[OCR] Falling back to last known value")
+                return filter.last()
 
-        return cost
+            print(f"[OCR] CPS before filter: {raw_value:.2f}")
+            return filter.filter(raw_value)
+
+        except Exception as e:
+            print(f"[OCR ERROR] Exception in CPS read: {e}")
+            return filter.last()
+
+
+
+
 
 class Upgrade(ShopItem):
     def __init__(self, name, base_cost, upgrade_image, building, multiplier):
@@ -591,7 +569,7 @@ class Upgrade(ShopItem):
 
     def get_click_position(self):
         shop_frame = update_Frame()
-        return getCenterPosition(shop_frame, self.upgrade_image)
+        return findBestScaledMatch_center(shop_frame, self.upgrade_image)
 
 
 
@@ -603,23 +581,12 @@ def update_Frame():
     screenImg = cv2.cvtColor(screenImg, cv2.COLOR_RGB2BGR)
     return screenImg
 
-def getBestROI(building_list):
-     bestBuilding = building_list[0]
-     bestCpS = building_list[0].getROI()
-     for element in building_list:
-          print('---------------------\n%s RIO: %s s\n---------------------' %(element.name, element.getROI()))
-          if (element.getROI() < bestCpS):
-               bestBuilding=element
-               bestCpS = element.getROI()
-     return bestBuilding
 
-def getCurrentCpS(building_list):
+
+def get_Current_CpS(building_list):
 
      CpS = 0
-     for element in building_list:
 
-          thisCpS = element.getTotalCpS()
-          CpS += thisCpS
 
 
 
@@ -627,33 +594,10 @@ def getCurrentCpS(building_list):
 
 
 
-
-
-
-
-
-
-
-
 def upgradeFunc(value, multiplier):
      value *= multiplier
 
-def inspect_hsv_values(image_path):
-     import cv2
 
-
-     img = cv2.imread(image_path)
-     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
-     def mouse_event(event, x, y, flags, param):
-         if event == cv2.EVENT_MOUSEMOVE:
-             pixel = hsv[y, x]
-             print(f"HSV at ({x},{y}): {pixel}")
-
-     cv2.imshow("Inspect HSV", img)
-     cv2.setMouseCallback("Inspect HSV", mouse_event)
-     cv2.waitKey(0)
-     cv2.destroyAllWindows()
 
 
 def append_cookie_log(timestamp, cookie_count, filename):
@@ -699,6 +643,7 @@ def human_format(num, pos=None):
         formatted = f'{num:.1f}{suffixes[magnitude]}'
     return formatted
 
+
 def draw_debug_regions(img, regions, labels=None, thickness=2):
     """
     Draws labeled rectangles on an image.
@@ -735,6 +680,7 @@ def draw_debug_regions(img, regions, labels=None, thickness=2):
                         0.6, (0, 0, 0), 2, cv2.LINE_AA)  # Black text for contrast
 
     return img_copy
+
 def draw_debug_points(img, points, labels=None, color=(0, 255, 0), radius=10, thickness=3, font_scale=0.7, font_thickness=2):
     """
     Draw points with optional labels on an image.
@@ -764,7 +710,7 @@ def draw_debug_points(img, points, labels=None, color=(0, 255, 0), radius=10, th
 
 ##Progrram start
 T = 3600
-#inspect_hsv_values("golden_cookie_blobs_debug.png")
+
 
 
 #Load the image(s) from file
@@ -784,7 +730,7 @@ grandma_building = cv2.imread('Images/Buildings/grandma.png')
 
 print('Images loaded! \n')
 
-output_dir = "QuitLogs"
+output_dir = "Logs"
 os.makedirs(output_dir, exist_ok=True)
 csv_path = os.path.join(output_dir, "cookie_log.csv")
 
@@ -814,37 +760,32 @@ click(large_cookie_center_pos)
 frame = update_Frame()
 
 
-#Find the starting cookie count region
-print('Looking for cookie word')
+#Find the starting cookie count region based on the "cookies" word
 cookie_word_region = findBestScaledMatch_bbox(screenImg, word_template)
-# After detecting "cookies" box...
-#Locate the various read regions
-number_region, suffix_region, cps_number_region, cps_suffix_region = compute_ocr_regions_from_cookies_box(
+
+#Locate the various read regions based off that reading
+number_region, suffix_region, cps_number_region, cps_suffix_region = compute_ocr_regions_cookie_count(
     cookie_word_region,
     suffix_width=200,     # ← You can adjust this as needed
-    suffix_pad=5,
+    suffix_pad=3,
     number_height=40,
-    number_pad=5
-)
+    number_pad=3,
+    cps_height=15,
+    cps_number_width=120,
+    cps_suffix_width=97,
+    cps_suffix_pad=1
 
-# Setup (run once)
-cursor_building = Building(
-    name="Cursor",
-    base_cps=0.1,
-    base_cost=15,
-    click_pos=(100, 500),
 
-    pointer_template=cv2.imread("Images/Buildings/cursor.png")
 )
 
 
-cursor_building.update_ocr_regions(frame)
-
-cursor_number_region = cursor_building.number_region
-cost_suffix = cursor_building.suffix_region
 
 
-regions = [cookie_word_region, number_region, suffix_region, cps_number_region, cps_suffix_region, cursor_number_region, cost_suffix]
+
+
+
+# Debugging image for startup regions and positions
+regions = [cookie_word_region, number_region, suffix_region, cps_number_region, cps_suffix_region]
 labels = ['Cookies Box', 'Number Region', 'Suffix Region', "CPS number", "CPS suffix", "Cost Number","Cost Suffix"]
 
 debug_img = draw_debug_regions(frame, regions, labels=labels)
@@ -857,30 +798,48 @@ debug_img = draw_debug_points(debug_img, [large_cookie_center_pos], labels=["Big
 cv2.imwrite('debug_startup.png', debug_img)
 print("Saved debug_startup.png with OCR regions and points drawn")
 
-# Then call your OCR functions with these regions
-num = get_number_from_region(number_region, debug=True)
-suffix = get_suffix_from_region(suffix_region, debug=True)
+
+#Now that regions are properly defined lets use them
+
+#filter for properly tracking cookie bank
+cookie_filter = AdaptiveMeanFilter()
+#initial cookie reading
+initial_cookie_count = read_filtered_value(number_region, suffix_region, cookie_filter)
+print(f"[DEBUG] Initial cookie count: {initial_cookie_count:.2f}")
 
 
-last_valid_cookie_count=0.0
-if num is not None and suffix is not None:
-    multiplier = SUFFIXES.get(suffix.lower(), 1)
-    final_value = num * multiplier
-    final_value = num * multiplier
-    last_valid_cookie_count = final_value
-
-    print(f"Setting last valid cookie count: {final_value}")
-else:
-    print("Failed to read cookie count or suffix")
+#filter for cps
+cps_filter = AdaptiveMeanFilter()
+#trying this with cps filter
+initial_cps_amount = read_filtered_value(cps_number_region, cps_suffix_region, cps_filter)
+print(f"[DEBUG] Initial CPS reading: {initial_cps_amount:.2f}")
 
 
-#Buildings and store positions
+
+
+# Setup (run once)
+cursor_building = Building(
+    name="Cursor",
+    base_cps=0.1,
+    base_cost=1,
+
+    click_pos=(100, 500),
+    pointer_template=cv2.imread("Images/Buildings/cursor.png"),
+    filter=cps_filter
+)
+
+
+
+cursor_building.update_ocr_regions(frame)
+
+cursor_number_region = cursor_building.number_region
+cost_suffix = cursor_building.suffix_region
 
 
 
 # Read cost and update
-cursor_building.read_current_cost(debug=True)
-print(f"{cursor_building.name} cost: {cursor_building.current_cost:.2f}")
+#cursor_building.read_current_cost(debug=True)
+#print(f"{cursor_building.name} cost: {cursor_building.current_cost:.2f}")
 
 
 
@@ -906,27 +865,12 @@ print(f"{cursor_building.name} cost: {cursor_building.current_cost:.2f}")
 #previousStorePos = temple.clickPos
 
 
-active_building_list = [cursor_building]
-
-#Index at 1 because we assume that cursor is already unlocked
-complete_building_list = [cursor_building]
 
 
 
 
-#Main Loop variables
-
-#filter for properly tracking cookie bank
-cookie_filter = AdaptiveMeanFilter()
-
-#filter for cps
-cps_filter = AdaptiveMeanFilter()
 
 
-cps_number = get_number_from_region(cps_number_region, debug=True)
-cps_suffix = get_suffix_from_region(cps_suffix_region, debug=True)
-#cps_last_trused = cps_filter.push(cps_number*cps_suffix)
-#print("I read cps as " + cps_last_trused)
 
 
 
@@ -984,13 +928,7 @@ while keyboard.is_pressed('q') == False:
         # Cookie Count Reading
         if frames_since_last_ocr >= OCR_INTERVAL:
 
-            cookie_count = read_cookie_count(
-                number_region,
-                suffix_region,
-                last_valid_cookie_count,
-                trusted_drop_ratio=0.5,
-                debug=True  # Optional: set to True if you want OCR debug images
-            )
+            cookie_count = read_filtered_value(number_region, suffix_region, cookie_filter, debug=True)
 
             print(f"Cookie count: {cookie_count}")
 
