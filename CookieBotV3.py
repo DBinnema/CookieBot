@@ -105,7 +105,7 @@ def get_number_from_region(region=(0, 0, 1400, 170), debug=False):
         _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
         if debug:
-            cv2.imwrite("debug_cookie_area.png", thresh)
+            cv2.imwrite("debug_number_read.png", thresh)
 
         # Run OCR with a strict whitelist for numbers and punctuation only
         text = pytesseract.image_to_string(
@@ -136,14 +136,14 @@ def get_number_from_region(region=(0, 0, 1400, 170), debug=False):
 
 
 #this is the suffix to the cookies if it exists... million trillion....
-def get_suffix_from_region(region, debug=True):
+def get_suffix_from_region(region, debug=False):
     try:
         img = np.array(ImageGrab.grab(bbox=region))
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
         if debug:
-            cv2.imwrite("debug_cookie_suffix_area.png", thresh)
+            cv2.imwrite("debug_suffix_area.png", thresh)
 
         # OCR configured to recognize letters only (suffix)
         text = pytesseract.image_to_string(
@@ -229,8 +229,9 @@ def read_filtered_value(number_region, suffix_region, value_filter, debug=False)
         if raw_value is None:
             print("[OCR] Falling back to last known value")
             return value_filter.last()
+        if debug:
+            print(f"[OCR] Value before filter: {raw_value:.2f}")
 
-        print(f"[OCR] Value before filter: {raw_value:.2f}")
         return value_filter.filter(raw_value)
 
     except Exception as e:
@@ -441,6 +442,7 @@ def find_golden_cookie_blobs(screenImg, min_area=1200, max_area=8000, min_circul
         cv2.imwrite("golden_cookie_blobs_debug.png", screenImg)
         cv2.imwrite("golden_mask_debug.png", mask)
 
+
     return golden_cookies
 
 #This locates the area for ocr based off the pattern mached name of the building
@@ -474,43 +476,27 @@ def compute_ocr_regions_shop(bbox,
 
 
 
-class ShopItem:
-    def __init__(self, name, base_cost):
+
+
+class Building():
+    def __init__(self, name, match_template, screen_image):
+
         self.name = name
-        self.amount = 0
-        self.base_cost = base_cost
-        self.base_cps = 0.0
-        self.current_cost = base_cost
-        self.current_roi = float('inf')  # Avoid division by zero
-
-    def get_total_cps(self):
-        return 0
-
-    def get_click_position(self):
-        return None
-
-    def __str__(self):
-        return f'{self.name}'
-
-class Building(ShopItem):
-    def __init__(self, name, base_cps, base_cost, click_pos, pointer_template, filter):
-        super().__init__(name, base_cost)
-        self.filter = filter
-        self.base_cps = base_cps
-        self.click_pos = click_pos
-        self.multiplier = 1.0
+        self.click_pos = None
+        self.cost = float('inf')
 
         # OCR-related
-        self.pointer_template = pointer_template
+        self.match_template = match_template
+        self.screen_image = screen_image
         self.number_region = None
         self.suffix_region = None
-        self.last_cost_read = base_cost
+        self.filter = AdaptiveMeanFilter()
 
-
+        self.update_ocr_regions(screen_image)
 
     def update_ocr_regions(self, screen_img):
         # Find pointer location
-        bbox = findBestScaledMatch_bbox(screen_img, self.pointer_template)
+        bbox = findBestScaledMatch_bbox(screen_img, self.match_template)
         if bbox == (0, 0, 0, 0):
             print(f"[WARN] Could not find template for {self.name}")
             return
@@ -527,49 +513,44 @@ class Building(ShopItem):
         self.number_region = number_region
         self.suffix_region = suffix_region
 
-    def read_current_cost(self, debug=False):
+    def read_current_cost(self, debug=True, screen_img=None, debug_output_dir="debug"):
         if self.number_region is None or self.suffix_region is None:
             print(f"[OCR] Regions not set for {self.name}, skipping read.")
-            return self.last_cost_read
+            return self.filter.last()
+
         try:
-            raw_value = interpret_number_with_suffix(number_region, suffix_region, debug=debug)
+            raw_value = interpret_number_with_suffix(self.number_region, self.suffix_region, debug=debug)
+            print(f"[Raw building Cost] {raw_value}")
 
             if raw_value is None:
                 print("[OCR] Falling back to last known value")
-                return filter.last()
+                return self.filter.last()
 
-            print(f"[OCR] CPS before filter: {raw_value:.2f}")
-            return filter.filter(raw_value)
+            print(f"[OCR] Cost before filter: {raw_value:.2f}")
+            cost = self.filter.filter(raw_value)
+            self.cost = cost
+
+            # === DEBUG DRAWING TO FILE ===
+            if debug and screen_img is not None:
+                os.makedirs(debug_output_dir, exist_ok=True)
+                debug_img = draw_debug_regions(
+                    screen_img,
+                    [self.number_region, self.suffix_region],
+                    labels=["Number", "Suffix"]
+                )
+                debug_path = os.path.join(debug_output_dir, f"{self.name}_ocr_debug.png")
+                cv2.imwrite(debug_path, debug_img)
+                print(f"[DEBUG] Saved OCR region debug image to {debug_path}")
+
+            return cost
 
         except Exception as e:
-            print(f"[OCR ERROR] Exception in CPS read: {e}")
-            return filter.last()
+            print(f"[OCR ERROR] Exception in Cost read: {e}")
+            return self.filter.last()
 
 
 
 
-
-class Upgrade(ShopItem):
-    def __init__(self, name, base_cost, upgrade_image, building, multiplier):
-        super().__init__(name, base_cost)
-        self.upgrade_image = upgrade_image
-        self.building = building
-        self.multiplier = multiplier
-
-    def get_total_cps(self):
-        return 0
-
-    def get_roi(self):
-        cps_contrib = self.building.amount * self.building.base_cps * self.building.multiplier
-        return self.base_cost / (cps_contrib or 1)
-
-    def add_amount(self):
-        self.building.add_multiplier(self.multiplier)
-        self.base_cost = math.inf  # Prevent future purchase
-
-    def get_click_position(self):
-        shop_frame = update_Frame()
-        return findBestScaledMatch_center(shop_frame, self.upgrade_image)
 
 
 
@@ -580,22 +561,6 @@ def update_Frame():
     screenImg = np.array(screenshot)
     screenImg = cv2.cvtColor(screenImg, cv2.COLOR_RGB2BGR)
     return screenImg
-
-
-
-def get_Current_CpS(building_list):
-
-     CpS = 0
-
-
-
-
-     return CpS
-
-
-
-def upgradeFunc(value, multiplier):
-     value *= multiplier
 
 
 
@@ -771,8 +736,8 @@ number_region, suffix_region, cps_number_region, cps_suffix_region = compute_ocr
     number_height=40,
     number_pad=3,
     cps_height=15,
-    cps_number_width=120,
-    cps_suffix_width=97,
+    cps_number_width=45,
+    cps_suffix_width=115,
     cps_suffix_pad=1
 
 
@@ -805,43 +770,50 @@ print("Saved debug_startup.png with OCR regions and points drawn")
 cookie_filter = AdaptiveMeanFilter()
 #initial cookie reading
 initial_cookie_count = read_filtered_value(number_region, suffix_region, cookie_filter)
-print(f"[DEBUG] Initial cookie count: {initial_cookie_count:.2f}")
+if(initial_cookie_count):
+    print(f"[DEBUG] Initial cookie count: {initial_cookie_count:.2f}")
+else:
+    print("[DEBUG] Initial cookie count could not be computed")
 
 
 #filter for cps
 cps_filter = AdaptiveMeanFilter()
 #trying this with cps filter
-initial_cps_amount = read_filtered_value(cps_number_region, cps_suffix_region, cps_filter)
-print(f"[DEBUG] Initial CPS reading: {initial_cps_amount:.2f}")
+initial_cps_amount = read_filtered_value(cps_number_region, cps_suffix_region, cps_filter, debug=False)
+if(initial_cps_amount):
+    print(f"[DEBUG] Initial CPS reading: {initial_cps_amount:.2f}")
+else:
+    print("[DEBUG] Initial CPS could not be computed")
 
+
+
+
+#this is to account for luckmaxing which is 100mins of CPS**** (CPS * 60 *100)
+if initial_cookie_count is not None and initial_cps_amount is not None:
+    #We calculate the lucky max
+    luckmax_threshold = initial_cps_amount * 60 * 100 # Stores the value above "lucky-maxing"
+    spendable_cookie_count = initial_cookie_count - luckmax_threshold
+
+    if(spendable_cookie_count > 0):{
+        print("Above luckmax threshold")
+        }
+    print(f"[DEBUG] Spendable Cookies: {spendable_cookie_count:.2f}")
+else:
+    print("[DEBUG] Initial CPS count could not be computed")
 
 
 
 # Setup (run once)
-cursor_building = Building(
-    name="Cursor",
-    base_cps=0.1,
-    base_cost=1,
+cursor_building = Building(name="Cursor",match_template=cv2.imread("Images/Buildings/cursor.png"), screen_image=frame)
 
-    click_pos=(100, 500),
-    pointer_template=cv2.imread("Images/Buildings/cursor.png"),
-    filter=cps_filter
-)
-
-
-
-cursor_building.update_ocr_regions(frame)
-
-cursor_number_region = cursor_building.number_region
-cost_suffix = cursor_building.suffix_region
-
+cursor_building.read_current_cost(debug=True, screen_img=frame, debug_output_dir="debug")
+cursor_cost = cursor_building.cost
+print(f"Building Cost: {cursor_cost:.2f}")
 
 
 # Read cost and update
 #cursor_building.read_current_cost(debug=True)
 #print(f"{cursor_building.name} cost: {cursor_building.current_cost:.2f}")
-
-
 
 
 
@@ -865,17 +837,6 @@ cost_suffix = cursor_building.suffix_region
 #previousStorePos = temple.clickPos
 
 
-
-
-
-
-
-
-
-
-
-#this is to account for luckmaxing which is 100mins of CPS**** (CPS * 60 *100)
-spendable_cookie_count = 0.0 # Stores the value above "lucky-maxing"
 
 OCR_INTERVAL = 15  # Only do OCR every 15 frames (adjust as needed)
 frames_since_last_ocr = OCR_INTERVAL  # Tracks how many frames since last OCR
@@ -911,7 +872,7 @@ while keyboard.is_pressed('q') == False:
 
         #Search for golden cookie
         if frames_since_cookie_search >= COOKIE_SEARCH_INTERVAL:
-            golden_cookies = find_golden_cookie_blobs(frame, debug=True)
+            golden_cookies = find_golden_cookie_blobs(frame)
             if golden_cookies:
                 print(f"Found {len(golden_cookies)} golden cookie(s): {golden_cookies}")
                 for pos in golden_cookies:
@@ -928,7 +889,7 @@ while keyboard.is_pressed('q') == False:
         # Cookie Count Reading
         if frames_since_last_ocr >= OCR_INTERVAL:
 
-            cookie_count = read_filtered_value(number_region, suffix_region, cookie_filter, debug=True)
+            cookie_count = read_filtered_value(number_region, suffix_region, cookie_filter, debug=False)
 
             print(f"Cookie count: {cookie_count}")
 
