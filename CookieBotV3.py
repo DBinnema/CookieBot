@@ -267,6 +267,27 @@ def record_cookie_count(timestamp, cookie_count, filename="cookie_log.csv"):
         f.write(f"{timestamp},{cookie_count}\n")  # CSV: time,cookie_count
 
 
+def compute_spendable_cookie_count(cookie_count, cps):
+    """
+    Calculates the spendable cookie count based on luckmaxing threshold.
+
+    :param cookie_count: The current number of cookies.
+    :param cps: The current cookies per second rate.
+    :return: The number of cookies available for spending after reserving enough for a lucky-max, or None.
+    """
+    if cookie_count is not None and cps is not None:
+        luckmax_threshold = cps * 60 * 100  # 100 minutes of CPS
+        spendable_cookie_count = cookie_count - luckmax_threshold
+
+        if spendable_cookie_count > 0:
+            print("Above luckmax threshold")
+        print(f"[DEBUG] Spendable Cookies: {spendable_cookie_count:.2f}")
+        return spendable_cookie_count
+    else:
+        print("[DEBUG] Spendable amount could not be computed")
+        return None
+
+
 def plot_cookie_log_with_events(cookie_log_path="cookie_log.csv", event_log_path="event_log.csv"):
     # Load cookie data
     df = pd.read_csv(cookie_log_path, parse_dates=["Timestamp"])
@@ -788,20 +809,7 @@ else:
 
 
 
-#this is to account for luckmaxing which is 100mins of CPS**** (CPS * 60 *100)
-if initial_cookie_count is not None and initial_cps_amount is not None:
-    #We calculate the lucky max
-    luckmax_threshold = initial_cps_amount * 60 * 100 # Stores the value above "lucky-maxing"
-    spendable_cookie_count = initial_cookie_count - luckmax_threshold
-
-    if(spendable_cookie_count > 0):{
-        print("Above luckmax threshold")
-        }
-    print(f"[DEBUG] Spendable Cookies: {spendable_cookie_count:.2f}")
-else:
-    print("[DEBUG] Initial CPS count could not be computed")
-
-
+spendable_cookie_count = compute_spendable_cookie_count(initial_cookie_count, initial_cps_amount)
 
 # Setup (run once)
 cursor_building = Building(name="Cursor",match_template=cv2.imread("Images/Buildings/cursor.png"), screen_image=frame)
@@ -892,6 +900,24 @@ while keyboard.is_pressed('q') == False:
             cookie_count = read_filtered_value(number_region, suffix_region, cookie_filter, debug=False)
 
             print(f"Cookie count: {cookie_count}")
+
+            spendable_cookie_count = compute_spendable_cookie_count(initial_cookie_count, initial_cps_amount)
+            print(f"Spendable cookies: {spendable_cookie_count}")
+
+
+            #CPS Readings
+
+            #cps_count = read_filtered_value(cps_number_region, cps_suffix_region, cps_filter, debug=False)
+            #if (initial_cps_amount):
+                #print(f"[DEBUG] Initial CPS reading: {initial_cps_amount:.2f}")
+            #else:
+                #print("[DEBUG] Initial CPS could not be computed")
+
+            #print(f"CPS count: {cps_count}")
+
+            #Building cost reading
+            #cursor_cost = cursor_building.read_current_cost(debug=True, screen_img=frame, debug_output_dir="debug")
+            #print(f"Cursor Cost: {cursor_cost}")
 
             frames_since_last_ocr = 0  # Reset OCR frame timer
 
