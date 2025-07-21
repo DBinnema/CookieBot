@@ -4,9 +4,6 @@
 
 # Cookie Bot
 Bot for cookie clicker: https://orteil.dashnet.org/cookieclicker/
-
-A Python bot that automates gameplay in [Cookie Clicker](https://orteil.dashnet.org/cookieclicker/) using screen capture, OCR, and input automation.
-
 ---
 ## Instructions
 1. Open a new cookie clicker game.
@@ -18,10 +15,13 @@ A Python bot that automates gameplay in [Cookie Clicker](https://orteil.dashnet.
 
 - Automatically clicks the big cookie
 - Detects and clicks golden cookies
+  
 - Reads cookie count and CPS using OCR
 - Adaptive filters to smooth OCR data
+  
 - Buys upgrades and buildings based on cost-efficiency
 - Implements Lucky Max strategy for optimal spending
+  
 - Debug mode with labeled visual overlays
 
 ---
